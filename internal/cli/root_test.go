@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"sort"
 	"testing"
 
@@ -40,6 +41,17 @@ func TestNewRootCommandRegistersMVPCommandsAndGlobalJSONFlag(t *testing.T) {
 }
 
 func TestRunRendersJSONEnvelopeForStubCommand(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+
 	stdout := new(bytes.Buffer)
 	stderr := new(bytes.Buffer)
 
