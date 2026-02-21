@@ -56,6 +56,21 @@ func Write(mode contracts.OutputMode, stdout io.Writer, stderr io.Writer, report
 		if err != nil {
 			return fmt.Errorf("failed to write human output: %w", err)
 		}
+
+		for _, issue := range normalized.Issues {
+			if _, err := fmt.Fprintf(stdout, "- %s [%s] %s\n", issue.Key, issue.Status, issue.Action); err != nil {
+				return fmt.Errorf("failed to write human output: %w", err)
+			}
+			for _, message := range issue.Messages {
+				reason := ""
+				if message.ReasonCode != "" {
+					reason = " (" + string(message.ReasonCode) + ")"
+				}
+				if _, err := fmt.Fprintf(stdout, "  - %s%s: %s\n", message.Level, reason, message.Text); err != nil {
+					return fmt.Errorf("failed to write human output: %w", err)
+				}
+			}
+		}
 		return nil
 	default:
 		return fmt.Errorf("unsupported output mode %q", mode)

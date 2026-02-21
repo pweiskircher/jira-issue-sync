@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pat/jira-issue-sync/internal/cli/middleware"
+	"github.com/pat/jira-issue-sync/internal/commands"
 	"github.com/pat/jira-issue-sync/internal/contracts"
 	"github.com/pat/jira-issue-sync/internal/lock"
 	"github.com/pat/jira-issue-sync/internal/output"
@@ -139,6 +140,9 @@ func newRootCommand(app AppContext) (*cobra.Command, *executionState) {
 
 func newStubCommand(app AppContext, state *executionState, def commandDefinition, locker lock.Locker) *cobra.Command {
 	dryRun := false
+	stateFilter := "all"
+	keyFilter := ""
+	includeUnchanged := false
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -156,7 +160,15 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 					CommandName: def.Name,
 					DryRun:      dryRun,
 				}
-				return runStub(context, app.Now().Sub(start))
+
+				report, fatalErr, handled := runInspectionCommand(def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged)
+				if !handled {
+					return runStub(context, app.Now().Sub(start))
+				}
+
+				report.CommandName = string(def.Name)
+				report.DryRun = dryRun
+				return renderAndResolveExit(context, report, app.Now().Sub(start), fatalErr)
 			})
 			return runner(cmd.Context())
 		},
@@ -166,7 +178,62 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 		cmd.Flags().BoolVar(&dryRun, "dry-run", false, "simulate without applying remote writes")
 	}
 
+	if supportsInspectionFilters(def.Name) {
+		cmd.Flags().StringVar(&stateFilter, "state", "all", "filter issues by local state (all|open|closed)")
+		cmd.Flags().StringVar(&keyFilter, "key", "", "filter issues by key substring")
+	}
+	if supportsIncludeUnchanged(def.Name) {
+		cmd.Flags().BoolVar(&includeUnchanged, "all", false, "include unchanged issues")
+	}
+
 	return cmd
+}
+
+func supportsInspectionFilters(name contracts.CommandName) bool {
+	switch name {
+	case contracts.CommandList, contracts.CommandStatus, contracts.CommandDiff:
+		return true
+	default:
+		return false
+	}
+}
+
+func supportsIncludeUnchanged(name contracts.CommandName) bool {
+	switch name {
+	case contracts.CommandStatus, contracts.CommandDiff:
+		return true
+	default:
+		return false
+	}
+}
+
+func runInspectionCommand(commandName contracts.CommandName, workDir string, stateFilter string, keyFilter string, includeUnchanged bool) (output.Report, error, bool) {
+	switch commandName {
+	case contracts.CommandList:
+		report, err := commands.RunList(workDir, commands.ListOptions{State: stateFilter, Key: keyFilter})
+		return report, err, true
+	case contracts.CommandStatus:
+		report, err := commands.RunStatus(workDir, commands.StatusOptions{State: stateFilter, Key: keyFilter, IncludeUnchanged: includeUnchanged})
+		return report, err, true
+	case contracts.CommandDiff:
+		report, err := commands.RunDiff(workDir, commands.DiffOptions{State: stateFilter, Key: keyFilter, IncludeUnchanged: includeUnchanged})
+		return report, err, true
+	default:
+		return output.Report{}, nil, false
+	}
+}
+
+func renderAndResolveExit(context CommandContext, report output.Report, duration time.Duration, fatalErr error) error {
+	if err := output.Write(context.OutputMode(), context.App.Stdout, context.App.Stderr, report, duration, fatalErr); err != nil {
+		return err
+	}
+
+	exitCode := output.ResolveExitCode(report, fatalErr)
+	if exitCode == contracts.ExitCodeSuccess {
+		return nil
+	}
+
+	return &codedExitError{Code: exitCode}
 }
 
 func normalizeAppContext(app AppContext) AppContext {
