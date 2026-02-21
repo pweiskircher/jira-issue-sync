@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pat/jira-issue-sync/internal/cli/middleware"
@@ -143,8 +144,24 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 	stateFilter := "all"
 	keyFilter := ""
 	includeUnchanged := false
-	pullProfile := ""
-	pullJQL := ""
+
+	initProjectKey := ""
+	initProfile := "default"
+	initBaseURL := ""
+	initEmail := ""
+	initDefaultJQL := ""
+	initProfileJQL := ""
+	initForce := false
+
+	newSummary := ""
+	newIssueType := "Task"
+	newStatus := "Open"
+	newPriority := ""
+	newAssignee := ""
+	newLabels := ""
+	newBody := ""
+
+	editEditor := ""
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -163,7 +180,26 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 					DryRun:      dryRun,
 				}
 
-				report, fatalErr, handled := runInspectionCommand(ctx, def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged, pullProfile, pullJQL)
+				report, fatalErr, handled := runInspectionCommand(def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged)
+				if !handled {
+					report, fatalErr, handled = runAuthoringCommand(ctx, def.Name, app.WorkDir, args, authoringRunOptions{
+						initProjectKey: initProjectKey,
+						initProfile:    initProfile,
+						initBaseURL:    initBaseURL,
+						initEmail:      initEmail,
+						initDefaultJQL: initDefaultJQL,
+						initProfileJQL: initProfileJQL,
+						initForce:      initForce,
+						newSummary:     newSummary,
+						newIssueType:   newIssueType,
+						newStatus:      newStatus,
+						newPriority:    newPriority,
+						newAssignee:    newAssignee,
+						newLabels:      newLabels,
+						newBody:        newBody,
+						editEditor:     editEditor,
+					})
+				}
 				if !handled {
 					return runStub(context, app.Now().Sub(start))
 				}
@@ -189,9 +225,24 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 	}
 
 	switch def.Name {
-	case contracts.CommandPull:
-		cmd.Flags().StringVar(&pullProfile, "profile", "", "profile name from config")
-		cmd.Flags().StringVar(&pullJQL, "jql", "", "override JQL query")
+	case contracts.CommandInit:
+		cmd.Flags().StringVar(&initProjectKey, "project-key", "", "project key for the default profile")
+		cmd.Flags().StringVar(&initProfile, "profile", "default", "profile name to initialize")
+		cmd.Flags().StringVar(&initBaseURL, "jira-base-url", "", "default Jira base URL")
+		cmd.Flags().StringVar(&initEmail, "jira-email", "", "default Jira account email")
+		cmd.Flags().StringVar(&initDefaultJQL, "default-jql", "", "global default JQL")
+		cmd.Flags().StringVar(&initProfileJQL, "profile-jql", "", "profile-specific default JQL")
+		cmd.Flags().BoolVar(&initForce, "force", false, "overwrite existing config if present")
+	case contracts.CommandNew:
+		cmd.Flags().StringVar(&newSummary, "summary", "", "summary for the new local draft")
+		cmd.Flags().StringVar(&newIssueType, "issue-type", "Task", "issue type for the new local draft")
+		cmd.Flags().StringVar(&newStatus, "status", "Open", "initial local status")
+		cmd.Flags().StringVar(&newPriority, "priority", "", "initial local priority")
+		cmd.Flags().StringVar(&newAssignee, "assignee", "", "initial local assignee")
+		cmd.Flags().StringVar(&newLabels, "labels", "", "comma-separated labels")
+		cmd.Flags().StringVar(&newBody, "body", "", "optional markdown body for the draft")
+	case contracts.CommandEdit:
+		cmd.Flags().StringVar(&editEditor, "editor", "", "editor command (defaults to VISUAL/EDITOR)")
 	}
 
 	return cmd
@@ -215,11 +266,8 @@ func supportsIncludeUnchanged(name contracts.CommandName) bool {
 	}
 }
 
-func runInspectionCommand(ctx context.Context, commandName contracts.CommandName, workDir string, stateFilter string, keyFilter string, includeUnchanged bool, pullProfile string, pullJQL string) (output.Report, error, bool) {
+func runInspectionCommand(commandName contracts.CommandName, workDir string, stateFilter string, keyFilter string, includeUnchanged bool) (output.Report, error, bool) {
 	switch commandName {
-	case contracts.CommandPull:
-		report, err := commands.RunPull(ctx, workDir, commands.PullOptions{Profile: pullProfile, JQL: pullJQL})
-		return report, err, true
 	case contracts.CommandList:
 		report, err := commands.RunList(workDir, commands.ListOptions{State: stateFilter, Key: keyFilter})
 		return report, err, true
@@ -232,6 +280,80 @@ func runInspectionCommand(ctx context.Context, commandName contracts.CommandName
 	default:
 		return output.Report{}, nil, false
 	}
+}
+
+type authoringRunOptions struct {
+	initProjectKey string
+	initProfile    string
+	initBaseURL    string
+	initEmail      string
+	initDefaultJQL string
+	initProfileJQL string
+	initForce      bool
+	newSummary     string
+	newIssueType   string
+	newStatus      string
+	newPriority    string
+	newAssignee    string
+	newLabels      string
+	newBody        string
+	editEditor     string
+}
+
+func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName, workDir string, args []string, options authoringRunOptions) (output.Report, error, bool) {
+	switch commandName {
+	case contracts.CommandInit:
+		report, err := commands.RunInit(workDir, commands.InitOptions{
+			ProjectKey:  options.initProjectKey,
+			Profile:     options.initProfile,
+			JiraBaseURL: options.initBaseURL,
+			JiraEmail:   options.initEmail,
+			DefaultJQL:  options.initDefaultJQL,
+			ProfileJQL:  options.initProfileJQL,
+			Force:       options.initForce,
+		})
+		return report, err, true
+	case contracts.CommandNew:
+		report, err := commands.RunNew(workDir, commands.NewOptions{
+			Summary:   options.newSummary,
+			IssueType: options.newIssueType,
+			Status:    options.newStatus,
+			Priority:  options.newPriority,
+			Assignee:  options.newAssignee,
+			Labels:    parseLabels(options.newLabels),
+			Body:      options.newBody,
+		})
+		return report, err, true
+	case contracts.CommandEdit:
+		if len(args) != 1 {
+			return output.Report{}, fmt.Errorf("edit requires exactly one issue key argument"), true
+		}
+		report, err := commands.RunEdit(ctx, workDir, commands.EditOptions{Key: args[0], Editor: options.editEditor})
+		return report, err, true
+	case contracts.CommandView:
+		if len(args) != 1 {
+			return output.Report{}, fmt.Errorf("view requires exactly one issue key argument"), true
+		}
+		report, err := commands.RunView(workDir, commands.ViewOptions{Key: args[0]})
+		return report, err, true
+	default:
+		return output.Report{}, nil, false
+	}
+}
+
+func parseLabels(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	labels := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			labels = append(labels, trimmed)
+		}
+	}
+	return labels
 }
 
 func renderAndResolveExit(context CommandContext, report output.Report, duration time.Duration, fatalErr error) error {
