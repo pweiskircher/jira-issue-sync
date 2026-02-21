@@ -163,6 +163,14 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 
 	editEditor := ""
 	pushProfile := ""
+	pullProfile := ""
+	pullJQL := ""
+	pullPageSize := 0
+	pullConcurrency := 0
+	syncProfile := ""
+	syncJQL := ""
+	syncPageSize := 0
+	syncConcurrency := 0
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -184,23 +192,31 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 				report, fatalErr, handled := runInspectionCommand(def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged)
 				if !handled {
 					report, fatalErr, handled = runAuthoringCommand(ctx, def.Name, app.WorkDir, args, authoringRunOptions{
-						initProjectKey: initProjectKey,
-						initProfile:    initProfile,
-						initBaseURL:    initBaseURL,
-						initEmail:      initEmail,
-						initDefaultJQL: initDefaultJQL,
-						initProfileJQL: initProfileJQL,
-						initForce:      initForce,
-						newSummary:     newSummary,
-						newIssueType:   newIssueType,
-						newStatus:      newStatus,
-						newPriority:    newPriority,
-						newAssignee:    newAssignee,
-						newLabels:      newLabels,
-						newBody:        newBody,
-						editEditor:     editEditor,
-						pushProfile:    pushProfile,
-						pushDryRun:     dryRun,
+						initProjectKey:  initProjectKey,
+						initProfile:     initProfile,
+						initBaseURL:     initBaseURL,
+						initEmail:       initEmail,
+						initDefaultJQL:  initDefaultJQL,
+						initProfileJQL:  initProfileJQL,
+						initForce:       initForce,
+						newSummary:      newSummary,
+						newIssueType:    newIssueType,
+						newStatus:       newStatus,
+						newPriority:     newPriority,
+						newAssignee:     newAssignee,
+						newLabels:       newLabels,
+						newBody:         newBody,
+						editEditor:      editEditor,
+						pushProfile:     pushProfile,
+						pushDryRun:      dryRun,
+						pullProfile:     pullProfile,
+						pullJQL:         pullJQL,
+						pullPageSize:    pullPageSize,
+						pullConcurrency: pullConcurrency,
+						syncProfile:     syncProfile,
+						syncJQL:         syncJQL,
+						syncPageSize:    syncPageSize,
+						syncConcurrency: syncConcurrency,
 					})
 				}
 				if !handled {
@@ -248,6 +264,16 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 		cmd.Flags().StringVar(&editEditor, "editor", "", "editor command (defaults to VISUAL/EDITOR)")
 	case contracts.CommandPush:
 		cmd.Flags().StringVar(&pushProfile, "profile", "", "profile name for transition overrides and Jira defaults")
+	case contracts.CommandPull:
+		cmd.Flags().StringVar(&pullProfile, "profile", "", "profile name for Jira defaults")
+		cmd.Flags().StringVar(&pullJQL, "jql", "", "override JQL for pull")
+		cmd.Flags().IntVar(&pullPageSize, "page-size", 0, "override pull page size")
+		cmd.Flags().IntVar(&pullConcurrency, "concurrency", 0, "override pull worker concurrency")
+	case contracts.CommandSync:
+		cmd.Flags().StringVar(&syncProfile, "profile", "", "profile name for push/pull defaults")
+		cmd.Flags().StringVar(&syncJQL, "jql", "", "override JQL for sync pull stage")
+		cmd.Flags().IntVar(&syncPageSize, "page-size", 0, "override sync pull page size")
+		cmd.Flags().IntVar(&syncConcurrency, "concurrency", 0, "override sync pull worker concurrency")
 	}
 
 	return cmd
@@ -288,23 +314,31 @@ func runInspectionCommand(commandName contracts.CommandName, workDir string, sta
 }
 
 type authoringRunOptions struct {
-	initProjectKey string
-	initProfile    string
-	initBaseURL    string
-	initEmail      string
-	initDefaultJQL string
-	initProfileJQL string
-	initForce      bool
-	newSummary     string
-	newIssueType   string
-	newStatus      string
-	newPriority    string
-	newAssignee    string
-	newLabels      string
-	newBody        string
-	editEditor     string
-	pushProfile    string
-	pushDryRun     bool
+	initProjectKey  string
+	initProfile     string
+	initBaseURL     string
+	initEmail       string
+	initDefaultJQL  string
+	initProfileJQL  string
+	initForce       bool
+	newSummary      string
+	newIssueType    string
+	newStatus       string
+	newPriority     string
+	newAssignee     string
+	newLabels       string
+	newBody         string
+	editEditor      string
+	pushProfile     string
+	pushDryRun      bool
+	pullProfile     string
+	pullJQL         string
+	pullPageSize    int
+	pullConcurrency int
+	syncProfile     string
+	syncJQL         string
+	syncPageSize    int
+	syncConcurrency int
 }
 
 func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName, workDir string, args []string, options authoringRunOptions) (output.Report, error, bool) {
@@ -345,6 +379,23 @@ func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName,
 		return report, err, true
 	case contracts.CommandPush:
 		report, err := commands.RunPush(ctx, workDir, commands.PushOptions{Profile: options.pushProfile, DryRun: options.pushDryRun})
+		return report, err, true
+	case contracts.CommandPull:
+		report, err := commands.RunPull(ctx, workDir, commands.PullOptions{
+			Profile:     options.pullProfile,
+			JQL:         options.pullJQL,
+			PageSize:    options.pullPageSize,
+			Concurrency: options.pullConcurrency,
+		})
+		return report, err, true
+	case contracts.CommandSync:
+		report, err := commands.RunSync(ctx, workDir, commands.SyncOptions{
+			Profile:     options.syncProfile,
+			JQL:         options.syncJQL,
+			PageSize:    options.syncPageSize,
+			Concurrency: options.syncConcurrency,
+			DryRun:      options.pushDryRun,
+		})
 		return report, err, true
 	default:
 		return output.Report{}, nil, false
