@@ -7,8 +7,28 @@ on:
       - master
 
 jobs:
-  go:
+  required-gates:
+    name: ${{ matrix.gate.name }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        gate:
+          - name: build
+            command: go build ./...
+          - name: unit-tests
+            command: go test ./cmd/... ./internal/...
+          - name: contracts-tests
+            command: go test ./test/contracts -count=1
+          - name: integration-tests
+            command: go test ./test/integration/... -count=1
+          - name: security-tests
+            command: go test ./test/security -count=1
+          - name: perf-harness-tests
+            command: go test ./test/perf -count=1
+          - name: no-cli-shellout-regression
+            command: go test ./test/security -run '^TestCoreSyncPathsDoNotImportOSExec$' -count=1
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,5 +38,5 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build and test
-        run: make ci
+      - name: Run ${{ matrix.gate.name }}
+        run: ${{ matrix.gate.command }}
