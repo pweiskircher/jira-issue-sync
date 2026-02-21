@@ -162,6 +162,7 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 	newBody := ""
 
 	editEditor := ""
+	pushProfile := ""
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -198,6 +199,8 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 						newLabels:      newLabels,
 						newBody:        newBody,
 						editEditor:     editEditor,
+						pushProfile:    pushProfile,
+						pushDryRun:     dryRun,
 					})
 				}
 				if !handled {
@@ -243,6 +246,8 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 		cmd.Flags().StringVar(&newBody, "body", "", "optional markdown body for the draft")
 	case contracts.CommandEdit:
 		cmd.Flags().StringVar(&editEditor, "editor", "", "editor command (defaults to VISUAL/EDITOR)")
+	case contracts.CommandPush:
+		cmd.Flags().StringVar(&pushProfile, "profile", "", "profile name for transition overrides and Jira defaults")
 	}
 
 	return cmd
@@ -298,6 +303,8 @@ type authoringRunOptions struct {
 	newLabels      string
 	newBody        string
 	editEditor     string
+	pushProfile    string
+	pushDryRun     bool
 }
 
 func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName, workDir string, args []string, options authoringRunOptions) (output.Report, error, bool) {
@@ -335,6 +342,9 @@ func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName,
 			return output.Report{}, fmt.Errorf("view requires exactly one issue key argument"), true
 		}
 		report, err := commands.RunView(workDir, commands.ViewOptions{Key: args[0]})
+		return report, err, true
+	case contracts.CommandPush:
+		report, err := commands.RunPush(ctx, workDir, commands.PushOptions{Profile: options.pushProfile, DryRun: options.pushDryRun})
 		return report, err, true
 	default:
 		return output.Report{}, nil, false
