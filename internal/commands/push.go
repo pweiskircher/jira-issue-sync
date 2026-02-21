@@ -16,6 +16,7 @@ import (
 	"github.com/pat/jira-issue-sync/internal/jira"
 	"github.com/pat/jira-issue-sync/internal/output"
 	"github.com/pat/jira-issue-sync/internal/store"
+	publishsync "github.com/pat/jira-issue-sync/internal/sync/publish"
 	pullsync "github.com/pat/jira-issue-sync/internal/sync/pull"
 	pushexecute "github.com/pat/jira-issue-sync/internal/sync/push/execute"
 )
@@ -79,14 +80,51 @@ func RunPush(ctx context.Context, workDir string, options PushOptions) (output.R
 		}
 
 		if contracts.LocalDraftKeyPattern.MatchString(record.Key) {
+			if options.DryRun {
+				appendIssue(&report, contracts.PerIssueResult{
+					Key:    record.Key,
+					Action: "skipped",
+					Status: contracts.PerIssueStatusSkipped,
+					Messages: []contracts.IssueMessage{{
+						Level:      "info",
+						ReasonCode: contracts.ReasonCodeDryRunNoWrite,
+						Text:       "dry-run: skipped draft publish",
+					}},
+				})
+				continue
+			}
+
+			publishResult, publishErr := publishsync.PublishDraft(ctx, publishsync.Options{
+				Adapter:    adapter,
+				Store:      workspaceStore,
+				Converter:  pushConverter,
+				ProjectKey: settings.Profile.ProjectKey,
+			}, publishsync.Input{
+				LocalKey:     record.Key,
+				RelativePath: record.RelativePath,
+				Document:     record.Document,
+			})
+			if publishErr != nil {
+				appendIssue(&report, contracts.PerIssueResult{
+					Key:    record.Key,
+					Action: "push-error",
+					Status: contracts.PerIssueStatusError,
+					Messages: []contracts.IssueMessage{{
+						Level:      "error",
+						ReasonCode: reasonFromPushError(publishErr),
+						Text:       "failed to publish local draft: " + strings.TrimSpace(publishErr.Error()),
+					}},
+				})
+				continue
+			}
+
 			appendIssue(&report, contracts.PerIssueResult{
-				Key:    record.Key,
-				Action: "skipped",
-				Status: contracts.PerIssueStatusWarning,
+				Key:    publishResult.RemoteKey,
+				Action: "created",
+				Status: contracts.PerIssueStatusSuccess,
 				Messages: []contracts.IssueMessage{{
-					Level:      "warning",
-					ReasonCode: contracts.ReasonCodeTempIDRewriteOutOfScope,
-					Text:       "push for local drafts is not implemented yet",
+					Level: "info",
+					Text:  "published local draft " + record.Key + " as " + publishResult.RemoteKey,
 				}},
 			})
 			continue
@@ -183,8 +221,11 @@ func appendIssue(report *output.Report, result contracts.PerIssueResult) {
 		report.Counts.Errors++
 	}
 
-	if result.Action == "updated" {
+	switch result.Action {
+	case "updated":
 		report.Counts.Updated++
+	case "created":
+		report.Counts.Created++
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/pat/jira-issue-sync/internal/config"
@@ -118,6 +119,158 @@ func TestRunPushSkipsAmbiguousTransitionAndStillAppliesSafeUpdates(t *testing.T)
 	}
 }
 
+func TestRunPushPublishesLocalDraftAndRewritesScopedReferences(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	writePushConfig(t, workspace)
+
+	localKey := "L-1a2b3c"
+	summary := "Draft publish scope"
+	local := mustRenderDoc(t, issue.Document{
+		CanonicalKey: localKey,
+		FrontMatter: issue.FrontMatter{
+			SchemaVersion: contracts.IssueFileSchemaVersionV1,
+			Key:           localKey,
+			Summary:       summary,
+			IssueType:     "Task",
+			Status:        "To Do",
+		},
+		MarkdownBody: "Relates to #L-1a2b3c and prose L-1a2b3c",
+		RawADFJSON:   `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"raw #L-1a2b3c"}]}]}`,
+	})
+	writeIssueFile(t, workspace, filepath.Join("open", localKey+"-draft-publish-scope.md"), local)
+
+	adapter := &pushAdapterStub{createdKeyBySummary: map[string]string{summary: "PROJ-321"}}
+
+	report, runErr := RunPush(context.Background(), workspace, PushOptions{Adapter: adapter, Environment: config.Environment{JiraAPIToken: "token"}})
+	if runErr != nil {
+		t.Fatalf("run push failed: %v", runErr)
+	}
+
+	if adapter.createCalls != 1 {
+		t.Fatalf("expected one create call, got %d", adapter.createCalls)
+	}
+	if report.Counts.Created != 1 || report.Counts.Errors != 0 {
+		t.Fatalf("unexpected counts: %#v", report.Counts)
+	}
+
+	targetFilename, err := issue.BuildFilename("PROJ-321", summary)
+	if err != nil {
+		t.Fatalf("build filename failed: %v", err)
+	}
+	publishedPath := filepath.Join(workspace, contracts.DefaultIssuesRootDir, "open", targetFilename)
+	publishedContent, err := os.ReadFile(publishedPath)
+	if err != nil {
+		t.Fatalf("expected published file at %s: %v", publishedPath, err)
+	}
+	if strings.Count(string(publishedContent), "#PROJ-321") != 1 {
+		t.Fatalf("expected exactly one rewritten temp-ID reference, got %q", string(publishedContent))
+	}
+	if !strings.Contains(string(publishedContent), "prose L-1a2b3c") {
+		t.Fatalf("expected prose temp id mention to remain, got %q", string(publishedContent))
+	}
+	if !strings.Contains(string(publishedContent), "raw #L-1a2b3c") {
+		t.Fatalf("expected raw ADF fenced payload to remain unchanged, got %q", string(publishedContent))
+	}
+
+	if _, err := os.Stat(filepath.Join(workspace, contracts.DefaultIssuesRootDir, "open", localKey+"-draft-publish-scope.md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected local draft filename to be removed, stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, contracts.DefaultIssuesRootDir, ".sync", "originals", "PROJ-321.md")); err != nil {
+		t.Fatalf("expected canonical snapshot for published issue, err=%v", err)
+	}
+}
+
+func TestRunPushRecoversDraftPublishFromMarkerWithoutSecondCreate(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	writePushConfig(t, workspace)
+
+	localKey := "L-cafe12"
+	summary := "Recoverable draft"
+	local := mustRenderDoc(t, issue.Document{
+		CanonicalKey: localKey,
+		FrontMatter: issue.FrontMatter{
+			SchemaVersion: contracts.IssueFileSchemaVersionV1,
+			Key:           localKey,
+			Summary:       summary,
+			IssueType:     "Task",
+			Status:        "To Do",
+		},
+		MarkdownBody: "See #L-cafe12",
+	})
+	writeIssueFile(t, workspace, filepath.Join("open", localKey+"-recoverable-draft.md"), local)
+
+	marker := mustRenderDoc(t, issue.Document{
+		CanonicalKey: "PROJ-88",
+		FrontMatter: issue.FrontMatter{
+			SchemaVersion: contracts.IssueFileSchemaVersionV1,
+			Key:           "PROJ-88",
+			Summary:       summary,
+			IssueType:     "Task",
+			Status:        "To Do",
+		},
+		MarkdownBody: "See #PROJ-88",
+	})
+	writeIssueFile(t, workspace, filepath.Join(".sync", "originals", localKey+".md"), marker)
+
+	adapter := &pushAdapterStub{}
+	report, runErr := RunPush(context.Background(), workspace, PushOptions{Adapter: adapter, Environment: config.Environment{JiraAPIToken: "token"}})
+	if runErr != nil {
+		t.Fatalf("run push failed: %v", runErr)
+	}
+
+	if adapter.createCalls != 0 {
+		t.Fatalf("expected publish recovery without second create call, got %d", adapter.createCalls)
+	}
+	if report.Counts.Created != 1 || report.Counts.Errors != 0 {
+		t.Fatalf("unexpected counts: %#v", report.Counts)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, contracts.DefaultIssuesRootDir, ".sync", "originals", localKey+".md")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected local marker snapshot cleanup, stat err=%v", err)
+	}
+}
+
+func TestRunPushDryRunSkipsDraftPublishMutations(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	writePushConfig(t, workspace)
+
+	localKey := "L-deadbe"
+	local := mustRenderDoc(t, issue.Document{
+		CanonicalKey: localKey,
+		FrontMatter: issue.FrontMatter{
+			SchemaVersion: contracts.IssueFileSchemaVersionV1,
+			Key:           localKey,
+			Summary:       "Dry run draft",
+			IssueType:     "Task",
+			Status:        "To Do",
+		},
+		MarkdownBody: "#L-deadbe",
+	})
+	draftRelativePath := filepath.Join("open", localKey+"-dry-run-draft.md")
+	writeIssueFile(t, workspace, draftRelativePath, local)
+
+	adapter := &pushAdapterStub{createdKeyBySummary: map[string]string{"Dry run draft": "PROJ-777"}}
+	report, runErr := RunPush(context.Background(), workspace, PushOptions{DryRun: true, Adapter: adapter, Environment: config.Environment{JiraAPIToken: "token"}})
+	if runErr != nil {
+		t.Fatalf("run push failed: %v", runErr)
+	}
+
+	if adapter.createCalls != 0 || adapter.updateCalls != 0 || adapter.applyCalls != 0 {
+		t.Fatalf("dry-run should avoid all remote mutations, create=%d update=%d apply=%d", adapter.createCalls, adapter.updateCalls, adapter.applyCalls)
+	}
+	if report.Counts.Created != 0 || report.Counts.Errors != 0 {
+		t.Fatalf("unexpected dry-run counts: %#v", report.Counts)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, contracts.DefaultIssuesRootDir, draftRelativePath)); err != nil {
+		t.Fatalf("expected draft file to remain untouched, err=%v", err)
+	}
+}
+
 func writePushIssue(t *testing.T, workspace string, key string, localSummary string, originalSummary string, localStatus string, originalStatus string) {
 	t.Helper()
 
@@ -141,11 +294,13 @@ func testRemoteIssue(key string, summary string, status string) jira.Issue {
 }
 
 type pushAdapterStub struct {
-	issues          map[string]jira.Issue
-	updateErrByKey  map[string]error
-	transitionByKey map[string]jira.TransitionResolution
-	updateCalls     int
-	applyCalls      int
+	issues              map[string]jira.Issue
+	updateErrByKey      map[string]error
+	transitionByKey     map[string]jira.TransitionResolution
+	createdKeyBySummary map[string]string
+	updateCalls         int
+	applyCalls          int
+	createCalls         int
 }
 
 func (s *pushAdapterStub) SearchIssues(context.Context, jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
@@ -157,8 +312,12 @@ func (s *pushAdapterStub) GetIssue(_ context.Context, issueKey string, _ []strin
 	}
 	return jira.Issue{}, errors.New("missing issue")
 }
-func (s *pushAdapterStub) CreateIssue(context.Context, jira.CreateIssueRequest) (jira.CreatedIssue, error) {
-	panic("unexpected call")
+func (s *pushAdapterStub) CreateIssue(_ context.Context, request jira.CreateIssueRequest) (jira.CreatedIssue, error) {
+	s.createCalls++
+	if key, ok := s.createdKeyBySummary[request.Summary]; ok {
+		return jira.CreatedIssue{Key: key}, nil
+	}
+	return jira.CreatedIssue{Key: "PROJ-999"}, nil
 }
 func (s *pushAdapterStub) UpdateIssue(_ context.Context, issueKey string, _ jira.UpdateIssueRequest) error {
 	s.updateCalls++
