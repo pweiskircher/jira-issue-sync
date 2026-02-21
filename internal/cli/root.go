@@ -143,6 +143,8 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 	stateFilter := "all"
 	keyFilter := ""
 	includeUnchanged := false
+	pullProfile := ""
+	pullJQL := ""
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -161,7 +163,7 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 					DryRun:      dryRun,
 				}
 
-				report, fatalErr, handled := runInspectionCommand(def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged)
+				report, fatalErr, handled := runInspectionCommand(ctx, def.Name, app.WorkDir, stateFilter, keyFilter, includeUnchanged, pullProfile, pullJQL)
 				if !handled {
 					return runStub(context, app.Now().Sub(start))
 				}
@@ -186,6 +188,12 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 		cmd.Flags().BoolVar(&includeUnchanged, "all", false, "include unchanged issues")
 	}
 
+	switch def.Name {
+	case contracts.CommandPull:
+		cmd.Flags().StringVar(&pullProfile, "profile", "", "profile name from config")
+		cmd.Flags().StringVar(&pullJQL, "jql", "", "override JQL query")
+	}
+
 	return cmd
 }
 
@@ -207,8 +215,11 @@ func supportsIncludeUnchanged(name contracts.CommandName) bool {
 	}
 }
 
-func runInspectionCommand(commandName contracts.CommandName, workDir string, stateFilter string, keyFilter string, includeUnchanged bool) (output.Report, error, bool) {
+func runInspectionCommand(ctx context.Context, commandName contracts.CommandName, workDir string, stateFilter string, keyFilter string, includeUnchanged bool, pullProfile string, pullJQL string) (output.Report, error, bool) {
 	switch commandName {
+	case contracts.CommandPull:
+		report, err := commands.RunPull(ctx, workDir, commands.PullOptions{Profile: pullProfile, JQL: pullJQL})
+		return report, err, true
 	case contracts.CommandList:
 		report, err := commands.RunList(workDir, commands.ListOptions{State: stateFilter, Key: keyFilter})
 		return report, err, true

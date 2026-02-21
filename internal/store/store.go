@@ -168,6 +168,13 @@ func (s *Store) ReadFile(relativePath string) ([]byte, error) {
 	return s.fs.ReadFile(relativePath)
 }
 
+func (s *Store) Remove(relativePath string) error {
+	if s == nil || s.fs == nil {
+		return fmt.Errorf("store is not initialized")
+	}
+	return s.fs.Remove(relativePath)
+}
+
 func issueDir(state IssueState) (string, error) {
 	switch state {
 	case IssueStateOpen:

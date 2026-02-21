@@ -3,11 +3,15 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
+	"github.com/pat/jira-issue-sync/internal/config"
 	"github.com/pat/jira-issue-sync/internal/contracts"
 )
 
@@ -124,5 +128,65 @@ func TestRunStatusReportsPartialViaJSONEnvelopeWithoutCrashingBatch(t *testing.T
 	}
 	if len(env.Issues) != 2 {
 		t.Fatalf("expected two issue results, got %d", len(env.Issues))
+	}
+}
+
+func TestRunPullRecoversStaleLockBeforeLocalWrites(t *testing.T) {
+	workspace := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(cwd)
+	})
+	if err := os.Chdir(workspace); err != nil {
+		t.Fatalf("chdir failed: %v", err)
+	}
+
+	cfg := contracts.Config{
+		ConfigVersion: contracts.ConfigSchemaVersionV1,
+		Profiles: map[string]contracts.ProjectProfile{
+			"default": {ProjectKey: "PROJ", DefaultJQL: "project = PROJ"},
+		},
+	}
+	if err := config.Write(filepath.Join(workspace, contracts.DefaultConfigFilePath), cfg); err != nil {
+		t.Fatalf("write config failed: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/rest/api/3/search" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"startAt":0,"maxResults":100,"total":1,"issues":[{"key":"PROJ-7","fields":{"summary":"Lock Recovery","description":{"version":1,"type":"doc","content":[]},"status":{"name":"Done"},"issuetype":{"name":"Task"},"updated":"2026-02-20T12:00:00Z"}}]}`))
+	}))
+	defer server.Close()
+
+	t.Setenv(config.EnvJiraAPIToken, "token")
+	t.Setenv(config.EnvJiraBaseURL, server.URL)
+	t.Setenv(config.EnvJiraEmail, "agent@example.com")
+
+	lockPath := filepath.Join(workspace, contracts.DefaultLockFilePath)
+	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
+		t.Fatalf("mkdir lock dir failed: %v", err)
+	}
+	if err := os.WriteFile(lockPath, []byte("stale\n"), 0o600); err != nil {
+		t.Fatalf("write stale lock failed: %v", err)
+	}
+	staleTime := time.Now().Add(-20 * time.Minute)
+	if err := os.Chtimes(lockPath, staleTime, staleTime); err != nil {
+		t.Fatalf("chtimes lock failed: %v", err)
+	}
+
+	stdout := new(bytes.Buffer)
+	stderr := new(bytes.Buffer)
+	exitCode := Run([]string{"pull"}, stdout, stderr)
+	if exitCode != int(contracts.ExitCodeSuccess) {
+		t.Fatalf("expected success exit code, got %d stderr=%s", exitCode, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(workspace, contracts.DefaultClosedDir, "PROJ-7-lock-recovery.md")); err != nil {
+		t.Fatalf("expected pulled issue file, got %v", err)
 	}
 }
