@@ -1,0 +1,8 @@
+# Local build artifact
+/jira-issue-sync
+
+# Local Jira sync workspace/state
+/.issues/
+
+# macOS
+.DS_Store
