@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
-	httpclient "github.com/pat/jira-issue-sync/internal/http"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/store"
-	pullsync "github.com/pat/jira-issue-sync/internal/sync/pull"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
+	httpclient "github.com/pweiskircher/jira-issue-sync/internal/http"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
+	pullsync "github.com/pweiskircher/jira-issue-sync/internal/sync/pull"
 )
 
 const (

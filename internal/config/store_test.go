@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestWriteThenReadRoundTrip(t *testing.T) {

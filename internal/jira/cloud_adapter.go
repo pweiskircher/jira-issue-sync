@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	httpclient "github.com/pat/jira-issue-sync/internal/http"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	httpclient "github.com/pweiskircher/jira-issue-sync/internal/http"
 )
 
-const maxResponseBodyBytes = 1 << 20
+const maxResponseBodyBytes = 10 << 20
 
 type CloudAdapterOptions struct {
 	BaseURL      string
@@ -105,6 +105,31 @@ func (a *CloudAdapter) SearchIssues(ctx context.Context, request SearchIssuesReq
 		NextPageToken: strings.TrimSpace(response.NextPageToken),
 		IsLast:        response.IsLast,
 	}, nil
+}
+
+func (a *CloudAdapter) ListFields(ctx context.Context) ([]FieldDefinition, error) {
+	if a == nil {
+		return nil, &Error{Code: ErrorCodeInvalidInput, Message: "jira adapter is nil"}
+	}
+
+	var response []fieldAPIResponse
+	if err := a.doJSON(ctx, http.MethodGet, "/rest/api/3/field", nil, nil, []int{http.StatusOK}, &response); err != nil {
+		return nil, err
+	}
+
+	fields := make([]FieldDefinition, 0, len(response))
+	for _, item := range response {
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			continue
+		}
+		fields = append(fields, FieldDefinition{
+			ID:     id,
+			Name:   strings.TrimSpace(item.Name),
+			Custom: item.Custom,
+		})
+	}
+	return fields, nil
 }
 
 func (a *CloudAdapter) GetIssue(ctx context.Context, issueKey string, fields []string) (Issue, error) {
@@ -364,7 +389,7 @@ func (a *CloudAdapter) doJSON(ctx context.Context, method string, resourcePath s
 	}
 	defer resp.Body.Close()
 
-	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes))
+	responseBody, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
 	if readErr != nil {
 		return &Error{
 			Code:       ErrorCodeTransport,
@@ -372,6 +397,15 @@ func (a *CloudAdapter) doJSON(ctx context.Context, method string, resourcePath s
 			StatusCode: resp.StatusCode,
 			Message:    "failed to read jira response body",
 			Err:        readErr,
+			redactor:   a.redactor,
+		}
+	}
+	if len(responseBody) > maxResponseBodyBytes {
+		return &Error{
+			Code:       ErrorCodeTransport,
+			ReasonCode: contracts.ReasonCodeTransportError,
+			StatusCode: resp.StatusCode,
+			Message:    "jira response body exceeded maximum size",
 			redactor:   a.redactor,
 		}
 	}
@@ -572,16 +606,56 @@ type issueAPIResponse struct {
 }
 
 type issueFieldsAPIData struct {
-	Summary     string          `json:"summary"`
-	Description json.RawMessage `json:"description"`
-	Labels      []string        `json:"labels"`
-	Assignee    *accountAPIRef  `json:"assignee"`
-	Priority    *namedAPIRef    `json:"priority"`
-	Status      *namedAPIRef    `json:"status"`
-	IssueType   *namedAPIRef    `json:"issuetype"`
-	Reporter    *accountAPIRef  `json:"reporter"`
-	CreatedAt   string          `json:"created"`
-	UpdatedAt   string          `json:"updated"`
+	Summary      string                     `json:"summary"`
+	Description  json.RawMessage            `json:"description"`
+	Labels       []string                   `json:"labels"`
+	Assignee     *accountAPIRef             `json:"assignee"`
+	Priority     *namedAPIRef               `json:"priority"`
+	Status       *namedAPIRef               `json:"status"`
+	IssueType    *namedAPIRef               `json:"issuetype"`
+	Reporter     *accountAPIRef             `json:"reporter"`
+	CreatedAt    string                     `json:"created"`
+	UpdatedAt    string                     `json:"updated"`
+	CustomFields map[string]json.RawMessage `json:"-"`
+}
+
+func (f *issueFieldsAPIData) UnmarshalJSON(data []byte) error {
+	type issueFieldsAlias issueFieldsAPIData
+	var alias issueFieldsAlias
+	if err := json.Unmarshal(data, &alias); err != nil {
+		return err
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	customFields := make(map[string]json.RawMessage)
+	for key, value := range raw {
+		if !strings.HasPrefix(key, "customfield_") {
+			continue
+		}
+		trimmed := strings.TrimSpace(string(value))
+		if trimmed == "" {
+			trimmed = "null"
+		}
+		var generic any
+		if err := json.Unmarshal([]byte(trimmed), &generic); err != nil {
+			continue
+		}
+		canonical, err := json.Marshal(generic)
+		if err != nil {
+			continue
+		}
+		customFields[key] = json.RawMessage(canonical)
+	}
+
+	*f = issueFieldsAPIData(alias)
+	if len(customFields) > 0 {
+		f.CustomFields = customFields
+	}
+	return nil
 }
 
 type accountAPIRef struct {
@@ -601,6 +675,12 @@ type createdIssueAPIResponse struct {
 	Self string `json:"self"`
 }
 
+type fieldAPIResponse struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Custom bool   `json:"custom"`
+}
+
 type transitionsAPIResponse struct {
 	Transitions []transitionAPIData `json:"transitions"`
 }
@@ -616,16 +696,17 @@ func mapAPIIssue(raw issueAPIResponse) Issue {
 		ID:  strings.TrimSpace(raw.ID),
 		Key: strings.TrimSpace(raw.Key),
 		Fields: IssueFields{
-			Summary:     strings.TrimSpace(raw.Fields.Summary),
-			Description: cloneRawJSON(raw.Fields.Description),
-			Labels:      normalizeStringSlice(raw.Fields.Labels),
-			Assignee:    mapAccountRef(raw.Fields.Assignee),
-			Priority:    mapNamedRef(raw.Fields.Priority),
-			Status:      mapStatusRef(raw.Fields.Status),
-			IssueType:   mapNamedRef(raw.Fields.IssueType),
-			Reporter:    mapAccountRef(raw.Fields.Reporter),
-			CreatedAt:   strings.TrimSpace(raw.Fields.CreatedAt),
-			UpdatedAt:   strings.TrimSpace(raw.Fields.UpdatedAt),
+			Summary:      strings.TrimSpace(raw.Fields.Summary),
+			Description:  cloneRawJSON(raw.Fields.Description),
+			Labels:       normalizeStringSlice(raw.Fields.Labels),
+			Assignee:     mapAccountRef(raw.Fields.Assignee),
+			Priority:     mapNamedRef(raw.Fields.Priority),
+			Status:       mapStatusRef(raw.Fields.Status),
+			IssueType:    mapNamedRef(raw.Fields.IssueType),
+			Reporter:     mapAccountRef(raw.Fields.Reporter),
+			CreatedAt:    strings.TrimSpace(raw.Fields.CreatedAt),
+			UpdatedAt:    strings.TrimSpace(raw.Fields.UpdatedAt),
+			CustomFields: cloneRawJSONMap(raw.Fields.CustomFields),
 		},
 	}
 }
@@ -660,4 +741,15 @@ func cloneRawJSON(value json.RawMessage) json.RawMessage {
 		return nil
 	}
 	return append(json.RawMessage(nil), value...)
+}
+
+func cloneRawJSONMap(values map[string]json.RawMessage) map[string]json.RawMessage {
+	if len(values) == 0 {
+		return nil
+	}
+	cloned := make(map[string]json.RawMessage, len(values))
+	for key, value := range values {
+		cloned[key] = cloneRawJSON(value)
+	}
+	return cloned
 }

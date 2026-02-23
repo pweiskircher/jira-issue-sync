@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	internalfs "github.com/pat/jira-issue-sync/internal/fs"
-	httpclient "github.com/pat/jira-issue-sync/internal/http"
-	"github.com/pat/jira-issue-sync/internal/lock"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	internalfs "github.com/pweiskircher/jira-issue-sync/internal/fs"
+	httpclient "github.com/pweiskircher/jira-issue-sync/internal/http"
+	"github.com/pweiskircher/jira-issue-sync/internal/lock"
 )
 
 func TestTokenRedactionPrimitiveDoesNotLeakSecrets(t *testing.T) {

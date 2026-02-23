@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
 )
 
 // ADFMarkdownConverter provides a deterministic MVP ADF -> Markdown projection.

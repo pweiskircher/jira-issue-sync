@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestResolveTransitionSelectionByID(t *testing.T) {

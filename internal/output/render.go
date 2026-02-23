@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 // pattern: Imperative Shell

@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/output"
-	"github.com/pat/jira-issue-sync/internal/sync/orchestrator"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/sync/orchestrator"
 )
 
 type SyncOptions struct {

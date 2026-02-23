@@ -1,6 +1,6 @@
 package converter
 
-import "github.com/pat/jira-issue-sync/internal/contracts"
+import "github.com/pweiskircher/jira-issue-sync/internal/contracts"
 
 // RiskSignal flags potentially lossy or unsafe description conversion outcomes.
 type RiskSignal struct {

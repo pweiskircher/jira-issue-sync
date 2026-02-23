@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/cli/middleware"
-	"github.com/pat/jira-issue-sync/internal/commands"
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/lock"
-	"github.com/pat/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/cli/middleware"
+	"github.com/pweiskircher/jira-issue-sync/internal/commands"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/lock"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
 )
 
 func TestMutatingCommandsEnforceLockAndRecoverStaleLock(t *testing.T) {
@@ -412,6 +412,10 @@ func (s *integrationAdapterStub) SearchIssues(_ context.Context, request jira.Se
 	return jira.SearchIssuesResponse{StartAt: request.StartAt, Total: len(s.pullIssues), Issues: s.pullIssues}, nil
 }
 
+func (s *integrationAdapterStub) ListFields(context.Context) ([]jira.FieldDefinition, error) {
+	return nil, nil
+}
+
 func (s *integrationAdapterStub) GetIssue(_ context.Context, issueKey string, _ []string) (jira.Issue, error) {
 	s.getCalls++
 	if issue, ok := s.issues[issueKey]; ok {
@@ -452,4 +456,3 @@ func (s *integrationAdapterStub) ResolveTransition(_ context.Context, issueKey s
 	}
 	return jira.TransitionResolution{Kind: jira.TransitionResolutionUnavailable, ReasonCode: contracts.ReasonCodeTransitionUnavailable}, nil
 }
-

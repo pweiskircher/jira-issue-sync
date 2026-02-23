@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/store"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
 )
 
 type Options struct {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	internalfs "github.com/pat/jira-issue-sync/internal/fs"
+	internalfs "github.com/pweiskircher/jira-issue-sync/internal/fs"
 )
 
 func TestStoreEnsureLayoutCreatesContractDirectories(t *testing.T) {

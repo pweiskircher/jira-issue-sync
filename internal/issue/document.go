@@ -1,13 +1,18 @@
 package issue
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
 )
+
+var customFieldKeyPattern = regexp.MustCompile(`^customfield_[0-9]+$`)
 
 // ParseDocument parses a markdown issue file into a deterministic model.
 func ParseDocument(path, content string) (Document, error) {
@@ -221,6 +226,22 @@ func parseFrontMatter(lines []string) (map[contracts.FrontMatterKey]interface{},
 		}
 
 		rawValue := strings.TrimSpace(parts[1])
+		if key == contracts.FrontMatterKeyCustomFields {
+			customFields, err := parseCustomFields(rawValue)
+			if err != nil {
+				return nil, err
+			}
+			values[key] = customFields
+			continue
+		}
+		if key == contracts.FrontMatterKeyCustomFieldNames {
+			customFieldNames, err := parseCustomFieldNames(rawValue)
+			if err != nil {
+				return nil, err
+			}
+			values[key] = customFieldNames
+			continue
+		}
 		if key == contracts.FrontMatterKeyLabels {
 			if rawValue == "" {
 				labels := make([]string, 0)
@@ -258,18 +279,20 @@ func buildFrontMatter(values map[contracts.FrontMatterKey]interface{}) (FrontMat
 	}
 
 	frontMatter := FrontMatter{
-		SchemaVersion: toString(values[contracts.FrontMatterKeySchemaVersion]),
-		Key:           toString(values[contracts.FrontMatterKeyKey]),
-		Summary:       toString(values[contracts.FrontMatterKeySummary]),
-		IssueType:     toString(values[contracts.FrontMatterKeyIssueType]),
-		Status:        toString(values[contracts.FrontMatterKeyStatus]),
-		Priority:      toString(values[contracts.FrontMatterKeyPriority]),
-		Assignee:      toString(values[contracts.FrontMatterKeyAssignee]),
-		Labels:        toStringSlice(values[contracts.FrontMatterKeyLabels]),
-		Reporter:      toString(values[contracts.FrontMatterKeyReporter]),
-		CreatedAt:     toString(values[contracts.FrontMatterKeyCreatedAt]),
-		UpdatedAt:     toString(values[contracts.FrontMatterKeyUpdatedAt]),
-		SyncedAt:      toString(values[contracts.FrontMatterKeySyncedAt]),
+		SchemaVersion:    toString(values[contracts.FrontMatterKeySchemaVersion]),
+		Key:              toString(values[contracts.FrontMatterKeyKey]),
+		Summary:          toString(values[contracts.FrontMatterKeySummary]),
+		IssueType:        toString(values[contracts.FrontMatterKeyIssueType]),
+		Status:           toString(values[contracts.FrontMatterKeyStatus]),
+		Priority:         toString(values[contracts.FrontMatterKeyPriority]),
+		Assignee:         toString(values[contracts.FrontMatterKeyAssignee]),
+		Labels:           toStringSlice(values[contracts.FrontMatterKeyLabels]),
+		Reporter:         toString(values[contracts.FrontMatterKeyReporter]),
+		CreatedAt:        toString(values[contracts.FrontMatterKeyCreatedAt]),
+		UpdatedAt:        toString(values[contracts.FrontMatterKeyUpdatedAt]),
+		SyncedAt:         toString(values[contracts.FrontMatterKeySyncedAt]),
+		CustomFields:     toCustomFields(values[contracts.FrontMatterKeyCustomFields]),
+		CustomFieldNames: toCustomFieldNames(values[contracts.FrontMatterKeyCustomFieldNames]),
 	}
 
 	return normalizeFrontMatter(frontMatter)
@@ -333,6 +356,18 @@ func normalizeFrontMatter(frontMatter FrontMatter) (FrontMatter, error) {
 	frontMatter.UpdatedAt = strings.TrimSpace(frontMatter.UpdatedAt)
 	frontMatter.SyncedAt = strings.TrimSpace(frontMatter.SyncedAt)
 	frontMatter.Labels = contracts.NormalizeLabels(frontMatter.Labels)
+
+	normalizedCustomFields, err := normalizeCustomFields(frontMatter.CustomFields)
+	if err != nil {
+		return FrontMatter{}, err
+	}
+	frontMatter.CustomFields = normalizedCustomFields
+
+	normalizedCustomFieldNames, err := normalizeCustomFieldNames(frontMatter.CustomFieldNames)
+	if err != nil {
+		return FrontMatter{}, err
+	}
+	frontMatter.CustomFieldNames = normalizedCustomFieldNames
 
 	return frontMatter, nil
 }
@@ -448,6 +483,24 @@ func renderFrontMatterLine(frontMatter FrontMatter, key contracts.FrontMatterKey
 			return "", false
 		}
 		return string(key) + ": " + quote(frontMatter.SyncedAt), true
+	case contracts.FrontMatterKeyCustomFields:
+		if len(frontMatter.CustomFields) == 0 {
+			return "", false
+		}
+		encoded, err := json.Marshal(frontMatter.CustomFields)
+		if err != nil {
+			return "", false
+		}
+		return string(key) + ": " + string(encoded), true
+	case contracts.FrontMatterKeyCustomFieldNames:
+		if len(frontMatter.CustomFieldNames) == 0 {
+			return "", false
+		}
+		encoded, err := json.Marshal(frontMatter.CustomFieldNames)
+		if err != nil {
+			return "", false
+		}
+		return string(key) + ": " + string(encoded), true
 	default:
 		return "", false
 	}
@@ -486,6 +539,156 @@ func parseInlineLabels(rawValue string) []string {
 		return []string{}
 	}
 	return []string{unquote(trimmed)}
+}
+
+func parseCustomFields(rawValue string) (map[string]json.RawMessage, error) {
+	trimmed := strings.TrimSpace(rawValue)
+	if trimmed == "" {
+		return map[string]json.RawMessage{}, nil
+	}
+
+	customFields := make(map[string]json.RawMessage)
+	if err := json.Unmarshal([]byte(trimmed), &customFields); err != nil {
+		return nil, &ParseError{
+			Code:       ParseErrorCodeMalformedFrontMatter,
+			ReasonCode: contracts.ReasonCodeValidationFailed,
+			Field:      contracts.FrontMatterKeyCustomFields,
+			Message:    "custom_fields must be a valid JSON object",
+			Err:        err,
+		}
+	}
+
+	return normalizeCustomFields(customFields)
+}
+
+func normalizeCustomFields(customFields map[string]json.RawMessage) (map[string]json.RawMessage, error) {
+	if len(customFields) == 0 {
+		return nil, nil
+	}
+
+	normalized := make(map[string]json.RawMessage, len(customFields))
+	keys := make([]string, 0, len(customFields))
+	for key := range customFields {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" {
+			return nil, &ParseError{
+				Code:       ParseErrorCodeMalformedFrontMatter,
+				ReasonCode: contracts.ReasonCodeValidationFailed,
+				Field:      contracts.FrontMatterKeyCustomFields,
+				Message:    "custom_fields keys must not be empty",
+			}
+		}
+
+		raw := strings.TrimSpace(string(customFields[key]))
+		if raw == "" {
+			raw = "null"
+		}
+		var generic any
+		if err := json.Unmarshal([]byte(raw), &generic); err != nil {
+			return nil, &ParseError{
+				Code:       ParseErrorCodeMalformedFrontMatter,
+				ReasonCode: contracts.ReasonCodeValidationFailed,
+				Field:      contracts.FrontMatterKeyCustomFields,
+				Message:    fmt.Sprintf("custom_fields value for %q must be valid JSON", key),
+				Err:        err,
+			}
+		}
+		canonical, err := json.Marshal(generic)
+		if err != nil {
+			return nil, &ParseError{
+				Code:       ParseErrorCodeMalformedFrontMatter,
+				ReasonCode: contracts.ReasonCodeValidationFailed,
+				Field:      contracts.FrontMatterKeyCustomFields,
+				Message:    fmt.Sprintf("failed to canonicalize custom_fields value for %q", key),
+				Err:        err,
+			}
+		}
+		normalized[trimmedKey] = json.RawMessage(canonical)
+	}
+
+	return normalized, nil
+}
+
+func parseCustomFieldNames(rawValue string) (map[string]string, error) {
+	trimmed := strings.TrimSpace(rawValue)
+	if trimmed == "" {
+		return map[string]string{}, nil
+	}
+
+	customFieldNames := make(map[string]string)
+	if err := json.Unmarshal([]byte(trimmed), &customFieldNames); err != nil {
+		return nil, &ParseError{
+			Code:       ParseErrorCodeMalformedFrontMatter,
+			ReasonCode: contracts.ReasonCodeValidationFailed,
+			Field:      contracts.FrontMatterKeyCustomFieldNames,
+			Message:    "custom_field_names must be a valid JSON object",
+			Err:        err,
+		}
+	}
+
+	return normalizeCustomFieldNames(customFieldNames)
+}
+
+func normalizeCustomFieldNames(customFieldNames map[string]string) (map[string]string, error) {
+	if len(customFieldNames) == 0 {
+		return nil, nil
+	}
+
+	normalized := make(map[string]string, len(customFieldNames))
+	keys := make([]string, 0, len(customFieldNames))
+	for key := range customFieldNames {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		trimmedKey := strings.TrimSpace(key)
+		if trimmedKey == "" || !customFieldKeyPattern.MatchString(trimmedKey) {
+			return nil, &ParseError{
+				Code:       ParseErrorCodeMalformedFrontMatter,
+				ReasonCode: contracts.ReasonCodeValidationFailed,
+				Field:      contracts.FrontMatterKeyCustomFieldNames,
+				Message:    fmt.Sprintf("custom_field_names key %q must match customfield_<number>", key),
+			}
+		}
+		trimmedValue := strings.TrimSpace(customFieldNames[key])
+		if trimmedValue == "" {
+			continue
+		}
+		normalized[trimmedKey] = trimmedValue
+	}
+
+	if len(normalized) == 0 {
+		return nil, nil
+	}
+	return normalized, nil
+}
+
+func toCustomFields(value interface{}) map[string]json.RawMessage {
+	if value == nil {
+		return nil
+	}
+	customFields, ok := value.(map[string]json.RawMessage)
+	if !ok {
+		return nil
+	}
+	return customFields
+}
+
+func toCustomFieldNames(value interface{}) map[string]string {
+	if value == nil {
+		return nil
+	}
+	customFieldNames, ok := value.(map[string]string)
+	if !ok {
+		return nil
+	}
+	return customFieldNames
 }
 
 func toString(value interface{}) string {

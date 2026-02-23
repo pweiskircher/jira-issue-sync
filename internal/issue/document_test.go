@@ -1,10 +1,11 @@
 package issue
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestParseRenderRoundTripIsDeterministic(t *testing.T) {
@@ -70,6 +71,9 @@ func TestRenderDocumentUsesCanonicalFieldOrder(t *testing.T) {
 			Status:        "Open",
 			Priority:      "high",
 			Labels:        []string{"z", "a"},
+			CustomFields: map[string]json.RawMessage{
+				"customfield_10011": json.RawMessage(`{"value":"Gold"}`),
+			},
 		},
 	}
 
@@ -86,6 +90,7 @@ func TestRenderDocumentUsesCanonicalFieldOrder(t *testing.T) {
 		"status:",
 		"priority:",
 		"labels:",
+		"custom_fields:",
 	}
 	lastIndex := -1
 	for _, token := range order {
@@ -136,6 +141,46 @@ status: "Open"
 	}
 	if !IsParseErrorCode(err, ParseErrorCodeInvalidSchemaVersion) {
 		t.Fatalf("expected schema version parse error, got: %v", err)
+	}
+}
+
+func TestParseDocumentParsesCustomFieldsJSON(t *testing.T) {
+	input := `---
+schema_version: "1"
+key: "PROJ-1"
+summary: "Summary"
+issue_type: "Task"
+status: "Open"
+custom_fields: {"customfield_10010":"Enterprise","customfield_10011":{"id":"20000","value":"Gold"}}
+---
+`
+
+	doc, err := ParseDocument("/tmp/PROJ-1.md", input)
+	if err != nil {
+		t.Fatalf("expected parse success, got: %v", err)
+	}
+	if got := string(doc.FrontMatter.CustomFields["customfield_10010"]); got != "\"Enterprise\"" {
+		t.Fatalf("expected custom field value, got %q", got)
+	}
+}
+
+func TestParseDocumentAllowsAliasedCustomFieldKey(t *testing.T) {
+	input := `---
+schema_version: "1"
+key: "PROJ-1"
+summary: "Summary"
+issue_type: "Task"
+status: "Open"
+custom_fields: {"customer":"Enterprise"}
+---
+`
+
+	doc, err := ParseDocument("/tmp/PROJ-1.md", input)
+	if err != nil {
+		t.Fatalf("expected parse success, got: %v", err)
+	}
+	if got := string(doc.FrontMatter.CustomFields["customer"]); got != "\"Enterprise\"" {
+		t.Fatalf("unexpected custom field value: %q", got)
 	}
 }
 

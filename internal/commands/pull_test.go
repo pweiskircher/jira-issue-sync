@@ -7,11 +7,22 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/store"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
 )
+
+func TestResolvePullFieldsUsesConfig(t *testing.T) {
+	fields := resolvePullFields(contracts.FieldConfig{
+		FetchMode:     "explicit",
+		IncludeFields: []string{"customfield_10010", "summary"},
+		ExcludeFields: []string{"summary"},
+	})
+	if len(fields) != 1 || fields[0] != "customfield_10010" {
+		t.Fatalf("unexpected resolved fields: %#v", fields)
+	}
+}
 
 func TestRunPullContinuesAfterPerIssueFailures(t *testing.T) {
 	t.Parallel()
@@ -118,6 +129,9 @@ func (s *pullAdapterStub) SearchIssues(ctx context.Context, request jira.SearchI
 	return s.search(ctx, request)
 }
 
+func (s *pullAdapterStub) ListFields(context.Context) ([]jira.FieldDefinition, error) {
+	panic("unexpected call")
+}
 func (s *pullAdapterStub) GetIssue(context.Context, string, []string) (jira.Issue, error) {
 	panic("unexpected call")
 }

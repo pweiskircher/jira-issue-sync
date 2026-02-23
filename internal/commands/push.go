@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/output"
-	"github.com/pat/jira-issue-sync/internal/store"
-	publishsync "github.com/pat/jira-issue-sync/internal/sync/publish"
-	pullsync "github.com/pat/jira-issue-sync/internal/sync/pull"
-	pushexecute "github.com/pat/jira-issue-sync/internal/sync/push/execute"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
+	publishsync "github.com/pweiskircher/jira-issue-sync/internal/sync/publish"
+	pullsync "github.com/pweiskircher/jira-issue-sync/internal/sync/pull"
+	pushexecute "github.com/pweiskircher/jira-issue-sync/internal/sync/push/execute"
 )
 
 var pushRemoteFields = []string{"summary", "description", "labels", "assignee", "priority", "status", "issuetype", "reporter", "created", "updated"}

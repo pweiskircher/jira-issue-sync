@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
-	"github.com/pat/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
 )
 
 func TestBuildIssuePlanReportsMissingBaseSnapshot(t *testing.T) {

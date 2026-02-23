@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 const (

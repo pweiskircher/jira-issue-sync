@@ -38,6 +38,16 @@ type ProjectProfile struct {
 	ProjectKey          string                        `json:"project_key"`
 	DefaultJQL          string                        `json:"default_jql,omitempty"`
 	TransitionOverrides map[string]TransitionOverride `json:"transition_overrides,omitempty"`
+	FieldConfig         FieldConfig                   `json:"field_config,omitempty"`
+}
+
+// FieldConfig controls pull field selection and custom-field labeling.
+type FieldConfig struct {
+	FetchMode       string            `json:"fetch_mode,omitempty"`
+	IncludeFields   []string          `json:"include_fields,omitempty"`
+	ExcludeFields   []string          `json:"exclude_fields,omitempty"`
+	Aliases         map[string]string `json:"aliases,omitempty"`
+	IncludeMetadata bool              `json:"include_metadata,omitempty"`
 }
 
 // TransitionOverride defines transition disambiguation selectors.
@@ -197,6 +207,8 @@ func ValidateConfig(config Config) error {
 			overridePath := profilePath + ".transition_overrides." + targetStatus
 			issues = append(issues, validateTransitionOverride(overridePath, targetStatus, override)...)
 		}
+
+		issues = append(issues, validateFieldConfig(profilePath+".field_config", profile.FieldConfig)...)
 	}
 
 	if len(issues) == 0 {
@@ -264,6 +276,44 @@ func ResolveTransitionSelection(override TransitionOverride, targetStatus string
 		Kind:                    TransitionSelectionDynamic,
 		DynamicStatusCandidates: uniqueFold(candidates),
 	}
+}
+
+func validateFieldConfig(path string, fieldConfig FieldConfig) []ConfigValidationIssue {
+	issues := make([]ConfigValidationIssue, 0)
+
+	fetchMode := strings.TrimSpace(fieldConfig.FetchMode)
+	if fetchMode != "" {
+		switch fetchMode {
+		case "navigable", "all", "explicit":
+		default:
+			issues = appendIssue(issues, path+".fetch_mode", ConfigValidationCodeInvalidValue, "must be one of: navigable, all, explicit")
+		}
+	}
+
+	for i, field := range fieldConfig.IncludeFields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed == "" {
+			issues = appendIssue(issues, fmt.Sprintf("%s.include_fields[%d]", path, i), ConfigValidationCodeInvalidValue, "must not be empty")
+		}
+	}
+	for i, field := range fieldConfig.ExcludeFields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed == "" {
+			issues = appendIssue(issues, fmt.Sprintf("%s.exclude_fields[%d]", path, i), ConfigValidationCodeInvalidValue, "must not be empty")
+		}
+	}
+
+	for key, alias := range fieldConfig.Aliases {
+		if strings.TrimSpace(key) == "" {
+			issues = appendIssue(issues, path+".aliases", ConfigValidationCodeInvalidValue, "alias keys must not be empty")
+			continue
+		}
+		if strings.TrimSpace(alias) == "" {
+			issues = appendIssue(issues, path+".aliases."+key, ConfigValidationCodeInvalidValue, "alias values must not be empty")
+		}
+	}
+
+	return issues
 }
 
 func validateTransitionOverride(path string, targetStatus string, override TransitionOverride) []ConfigValidationIssue {

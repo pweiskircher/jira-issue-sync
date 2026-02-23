@@ -26,6 +26,7 @@ labels:
 - "backend"
 - "auth"
 reporter: "R. User"
+custom_fields: {"customfield_10010":"Enterprise","customfield_10011":{"id":"20000","value":"Gold"}}
 created_at: "2026-02-20T12:00:00Z"
 updated_at: "2026-02-20T12:10:00Z"
 synced_at: "2026-02-20T12:15:00.123456Z"
@@ -57,6 +58,8 @@ Optional:
 - `created_at`
 - `updated_at`
 - `synced_at`
+- `custom_fields` (JSON object keyed by configured aliases; populated from mapped Jira custom fields)
+- `custom_field_names` (optional JSON map for human-readable labels)
 
 Unknown keys are rejected.
 

@@ -84,6 +84,7 @@ When editing:
 - Update the Markdown body for description changes.
 - Keep `schema_version` and `key` valid.
 - Keep at most one `jira-adf` block.
+- `custom_fields` are pulled into files for visibility, but currently treated as read-only (push ignores them).
 
 How Markdown + ADF work:
 
@@ -101,6 +102,33 @@ Recommended workflow:
 6. `jira-issue-sync push`
 
 For full format rules, see [`docs/file-format.md`](docs/file-format.md).
+
+### Custom field aliases (pull)
+
+You can configure which custom fields are fetched and mapped into frontmatter:
+
+```json
+{
+  "profiles": {
+    "core": {
+      "project_key": "CORE",
+      "field_config": {
+        "fetch_mode": "navigable",
+        "include_fields": ["customfield_12345"],
+        "aliases": {
+          "customfield_12345": "customer"
+        }
+      }
+    }
+  }
+}
+```
+
+With this config, `pull` writes only configured aliases in `custom_fields`, for example:
+
+```yaml
+custom_fields: {"customer":"Acme Inc"}
+```
 
 ## Authentication and config precedence
 

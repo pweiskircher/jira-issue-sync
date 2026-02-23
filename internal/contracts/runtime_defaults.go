@@ -41,6 +41,7 @@ const (
 	CommandEdit   CommandName = "edit"
 	CommandView   CommandName = "view"
 	CommandDiff   CommandName = "diff"
+	CommandFields CommandName = "fields"
 )
 
 type LockRequirement string
@@ -62,6 +63,7 @@ var CommandLockPolicy = map[CommandName]LockRequirement{
 	CommandList:   LockRequirementNone,
 	CommandView:   LockRequirementNone,
 	CommandDiff:   LockRequirementNone,
+	CommandFields: LockRequirementNone,
 }
 
 func RequiresLock(command CommandName) bool {

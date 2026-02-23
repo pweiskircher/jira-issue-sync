@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestRetryClientRetriesRetryableStatusesWithExponentialBackoff(t *testing.T) {

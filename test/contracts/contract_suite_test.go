@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/cli"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/store"
-	pushplan "github.com/pat/jira-issue-sync/internal/sync/push/plan"
+	"github.com/pweiskircher/jira-issue-sync/internal/cli"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
+	pushplan "github.com/pweiskircher/jira-issue-sync/internal/sync/push/plan"
 )
 
 func TestCacheFileRemainsDeterministicAcrossEquivalentWrites(t *testing.T) {

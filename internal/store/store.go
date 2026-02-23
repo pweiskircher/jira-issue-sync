@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	internalfs "github.com/pat/jira-issue-sync/internal/fs"
-	"github.com/pat/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	internalfs "github.com/pweiskircher/jira-issue-sync/internal/fs"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
 )
 
 const CacheSchemaVersionV1 = "1"

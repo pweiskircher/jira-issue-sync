@@ -2,6 +2,7 @@
 
 build:
 	go build ./...
+	go build -o jira-issue-sync ./cmd/jira-issue-sync
 
 test: test-unit test-contracts test-integration test-security test-perf
 

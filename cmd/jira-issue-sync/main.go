@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/pat/jira-issue-sync/internal/cli"
+	"github.com/pweiskircher/jira-issue-sync/internal/cli"
 )
 
 func main() {

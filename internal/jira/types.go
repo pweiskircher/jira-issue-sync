@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 type Adapter interface {
 	SearchIssues(ctx context.Context, request SearchIssuesRequest) (SearchIssuesResponse, error)
+	ListFields(ctx context.Context) ([]FieldDefinition, error)
 	GetIssue(ctx context.Context, issueKey string, fields []string) (Issue, error)
 	CreateIssue(ctx context.Context, request CreateIssueRequest) (CreatedIssue, error)
 	UpdateIssue(ctx context.Context, issueKey string, request UpdateIssueRequest) error
@@ -41,16 +42,17 @@ type Issue struct {
 }
 
 type IssueFields struct {
-	Summary     string
-	Description json.RawMessage
-	Labels      []string
-	Assignee    *AccountRef
-	Priority    *NamedRef
-	Status      *StatusRef
-	IssueType   *NamedRef
-	Reporter    *AccountRef
-	CreatedAt   string
-	UpdatedAt   string
+	Summary      string
+	Description  json.RawMessage
+	Labels       []string
+	Assignee     *AccountRef
+	Priority     *NamedRef
+	Status       *StatusRef
+	IssueType    *NamedRef
+	Reporter     *AccountRef
+	CreatedAt    string
+	UpdatedAt    string
+	CustomFields map[string]json.RawMessage
 }
 
 type AccountRef struct {
@@ -116,4 +118,10 @@ type TransitionResolution struct {
 	Matches          []Transition
 	TriedCandidates  []string
 	ReasonCode       contracts.ReasonCode
+}
+
+type FieldDefinition struct {
+	ID     string
+	Name   string
+	Custom bool
 }

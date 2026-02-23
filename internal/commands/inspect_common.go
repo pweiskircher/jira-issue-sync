@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
 )
 
 const (

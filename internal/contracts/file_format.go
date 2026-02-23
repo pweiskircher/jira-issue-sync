@@ -28,18 +28,20 @@ var RawADFFencedBlockPattern = regexp.MustCompile("(?s)```jira-adf[ \\t]*\\n(\\{
 type FrontMatterKey string
 
 const (
-	FrontMatterKeySchemaVersion FrontMatterKey = "schema_version"
-	FrontMatterKeyKey           FrontMatterKey = "key"
-	FrontMatterKeySummary       FrontMatterKey = "summary"
-	FrontMatterKeyIssueType     FrontMatterKey = "issue_type"
-	FrontMatterKeyStatus        FrontMatterKey = "status"
-	FrontMatterKeyPriority      FrontMatterKey = "priority"
-	FrontMatterKeyAssignee      FrontMatterKey = "assignee"
-	FrontMatterKeyLabels        FrontMatterKey = "labels"
-	FrontMatterKeyReporter      FrontMatterKey = "reporter"
-	FrontMatterKeyCreatedAt     FrontMatterKey = "created_at"
-	FrontMatterKeyUpdatedAt     FrontMatterKey = "updated_at"
-	FrontMatterKeySyncedAt      FrontMatterKey = "synced_at"
+	FrontMatterKeySchemaVersion    FrontMatterKey = "schema_version"
+	FrontMatterKeyKey              FrontMatterKey = "key"
+	FrontMatterKeySummary          FrontMatterKey = "summary"
+	FrontMatterKeyIssueType        FrontMatterKey = "issue_type"
+	FrontMatterKeyStatus           FrontMatterKey = "status"
+	FrontMatterKeyPriority         FrontMatterKey = "priority"
+	FrontMatterKeyAssignee         FrontMatterKey = "assignee"
+	FrontMatterKeyLabels           FrontMatterKey = "labels"
+	FrontMatterKeyReporter         FrontMatterKey = "reporter"
+	FrontMatterKeyCreatedAt        FrontMatterKey = "created_at"
+	FrontMatterKeyUpdatedAt        FrontMatterKey = "updated_at"
+	FrontMatterKeySyncedAt         FrontMatterKey = "synced_at"
+	FrontMatterKeyCustomFields     FrontMatterKey = "custom_fields"
+	FrontMatterKeyCustomFieldNames FrontMatterKey = "custom_field_names"
 )
 
 // RequiredFrontMatterKeys are mandatory for deterministic parsing.
@@ -60,6 +62,8 @@ var OptionalFrontMatterKeys = []FrontMatterKey{
 	FrontMatterKeyCreatedAt,
 	FrontMatterKeyUpdatedAt,
 	FrontMatterKeySyncedAt,
+	FrontMatterKeyCustomFields,
+	FrontMatterKeyCustomFieldNames,
 }
 
 // RawADFDoc is the expected envelope inside the jira-adf fenced block.

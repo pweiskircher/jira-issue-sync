@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/store"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
 )
 
 func TestRunInitCreatesWorkspaceLayoutAndConfig(t *testing.T) {

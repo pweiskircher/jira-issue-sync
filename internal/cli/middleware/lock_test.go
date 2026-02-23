@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/lock"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/lock"
 )
 
 func TestWithCommandLockMutatingCommandAcquiresAndReleases(t *testing.T) {

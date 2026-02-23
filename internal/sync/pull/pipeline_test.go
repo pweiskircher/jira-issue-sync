@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
 )
 
 type paginationAdapterStub struct {
@@ -16,6 +16,10 @@ type paginationAdapterStub struct {
 func (s *paginationAdapterStub) SearchIssues(ctx context.Context, request jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
 	s.requests = append(s.requests, request)
 	return s.search(ctx, request)
+}
+
+func (s *paginationAdapterStub) ListFields(context.Context) ([]jira.FieldDefinition, error) {
+	panic("unexpected call")
 }
 
 func (s *paginationAdapterStub) GetIssue(context.Context, string, []string) (jira.Issue, error) {
@@ -37,6 +41,17 @@ func (s *paginationAdapterStub) ResolveTransition(context.Context, string, contr
 	panic("unexpected call")
 }
 
+func TestIssueStateFromStatusTreatsRejectedAsClosed(t *testing.T) {
+	t.Parallel()
+
+	closedStatuses := []string{"Rejected", "Declined", "Cancelled", "Won't Do"}
+	for _, status := range closedStatuses {
+		if got := issueStateFromStatus(status); got != "closed" {
+			t.Fatalf("expected status %q to be closed, got %q", status, got)
+		}
+	}
+}
+
 func TestFetchIssuesUsesTokenPaginationWhenAvailable(t *testing.T) {
 	t.Parallel()
 
@@ -48,7 +63,7 @@ func TestFetchIssuesUsesTokenPaginationWhenAvailable(t *testing.T) {
 				t.Fatalf("did not expect token on first page: %q", request.NextPageToken)
 			}
 			return jira.SearchIssuesResponse{
-				Issues: []jira.Issue{{Key: "PROJ-1"}},
+				Issues:        []jira.Issue{{Key: "PROJ-1"}},
 				NextPageToken: "token-2",
 			}, nil
 		case 2:
@@ -56,8 +71,8 @@ func TestFetchIssuesUsesTokenPaginationWhenAvailable(t *testing.T) {
 				t.Fatalf("expected token on second page, got %q", request.NextPageToken)
 			}
 			return jira.SearchIssuesResponse{
-				Issues:  []jira.Issue{{Key: "PROJ-2"}},
-				IsLast:  true,
+				Issues: []jira.Issue{{Key: "PROJ-2"}},
+				IsLast: true,
 			}, nil
 		default:
 			t.Fatalf("unexpected extra request: %#v", request)
@@ -65,7 +80,7 @@ func TestFetchIssuesUsesTokenPaginationWhenAvailable(t *testing.T) {
 		}
 	}
 
-	issues, err := fetchIssues(context.Background(), adapter, "project = PROJ", 50)
+	issues, err := fetchIssues(context.Background(), adapter, "project = PROJ", 50, []string{"*navigable"})
 	if err != nil {
 		t.Fatalf("fetch issues failed: %v", err)
 	}

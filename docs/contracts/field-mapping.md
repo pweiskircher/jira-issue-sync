@@ -24,6 +24,7 @@ Read-only metadata:
 - `created_at`
 - `updated_at`
 - `synced_at`
+- `custom_fields` (pulled for visibility; not pushed in MVP)
 
 ## Normalization rules
 
@@ -47,7 +48,6 @@ Explicit unsupported MVP classes:
 - `worklogs`
 - `sprint`
 - `epic_link`
-- `custom_fields`
 
 ## Stable reason-code taxonomy
 

@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/cli/middleware"
-	"github.com/pat/jira-issue-sync/internal/commands"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/lock"
-	"github.com/pat/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/cli/middleware"
+	"github.com/pweiskircher/jira-issue-sync/internal/commands"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/lock"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
 	"github.com/spf13/cobra"
 )
 
@@ -80,6 +80,7 @@ var mvpCommandDefinitions = []commandDefinition{
 	{Name: contracts.CommandEdit, Short: "Open an issue in the configured editor"},
 	{Name: contracts.CommandView, Short: "Render a local issue"},
 	{Name: contracts.CommandDiff, Short: "Show local issue diff against last synced snapshot"},
+	{Name: contracts.CommandFields, Short: "List Jira fields and custom field IDs"},
 }
 
 // Run executes the CLI using shared output and exit-code plumbing.
@@ -171,6 +172,9 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 	syncJQL := ""
 	syncPageSize := 0
 	syncConcurrency := 0
+	fieldsProfile := ""
+	fieldsAll := false
+	fieldsSearch := ""
 
 	cmd := &cobra.Command{
 		Use:   string(def.Name),
@@ -217,6 +221,9 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 						syncJQL:         syncJQL,
 						syncPageSize:    syncPageSize,
 						syncConcurrency: syncConcurrency,
+						fieldsProfile:   fieldsProfile,
+						fieldsAll:       fieldsAll,
+						fieldsSearch:    fieldsSearch,
 					})
 				}
 				if !handled {
@@ -274,6 +281,10 @@ func newStubCommand(app AppContext, state *executionState, def commandDefinition
 		cmd.Flags().StringVar(&syncJQL, "jql", "", "override JQL for sync pull stage")
 		cmd.Flags().IntVar(&syncPageSize, "page-size", 0, "override sync pull page size")
 		cmd.Flags().IntVar(&syncConcurrency, "concurrency", 0, "override sync pull worker concurrency")
+	case contracts.CommandFields:
+		cmd.Flags().StringVar(&fieldsProfile, "profile", "", "profile name for Jira defaults")
+		cmd.Flags().BoolVar(&fieldsAll, "all", false, "include non-custom Jira fields")
+		cmd.Flags().StringVar(&fieldsSearch, "search", "", "filter by substring in field id or name")
 	}
 
 	return cmd
@@ -339,6 +350,9 @@ type authoringRunOptions struct {
 	syncJQL         string
 	syncPageSize    int
 	syncConcurrency int
+	fieldsProfile   string
+	fieldsAll       bool
+	fieldsSearch    string
 }
 
 func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName, workDir string, args []string, options authoringRunOptions) (output.Report, error, bool) {
@@ -395,6 +409,13 @@ func runAuthoringCommand(ctx context.Context, commandName contracts.CommandName,
 			PageSize:    options.syncPageSize,
 			Concurrency: options.syncConcurrency,
 			DryRun:      options.pushDryRun,
+		})
+		return report, err, true
+	case contracts.CommandFields:
+		report, err := commands.RunFields(ctx, workDir, commands.FieldsOptions{
+			Profile: options.fieldsProfile,
+			All:     options.fieldsAll,
+			Search:  options.fieldsSearch,
 		})
 		return report, err, true
 	default:

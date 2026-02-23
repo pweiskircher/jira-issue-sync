@@ -13,8 +13,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	httpclient "github.com/pat/jira-issue-sync/internal/http"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	httpclient "github.com/pweiskircher/jira-issue-sync/internal/http"
 )
 
 func TestCloudAdapterImplementsAdapterInterface(t *testing.T) {
@@ -72,7 +72,8 @@ func TestCloudAdapterSearchIssuesRetriesOnDefaultRetryCodes(t *testing.T) {
 						"fields": {
 							"summary": "Issue",
 							"labels": ["one"],
-							"description": {"type":"doc","version":1,"content":[]}
+							"description": {"type":"doc","version":1,"content":[]},
+						"customfield_10010": "Enterprise"
 						}
 					}
 				]
@@ -97,6 +98,9 @@ func TestCloudAdapterSearchIssuesRetriesOnDefaultRetryCodes(t *testing.T) {
 	}
 	if result.Total != 1 || len(result.Issues) != 1 || result.Issues[0].Key != "PROJ-1" {
 		t.Fatalf("unexpected search result: %#v", result)
+	}
+	if got := string(result.Issues[0].Fields.CustomFields["customfield_10010"]); got != "\"Enterprise\"" {
+		t.Fatalf("expected custom field payload, got %q", got)
 	}
 
 	for i := range methods {

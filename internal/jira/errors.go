@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	httpclient "github.com/pat/jira-issue-sync/internal/http"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	httpclient "github.com/pweiskircher/jira-issue-sync/internal/http"
 )
 
 type ErrorCode string

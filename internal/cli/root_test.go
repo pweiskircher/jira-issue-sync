@@ -8,7 +8,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestNewRootCommandRegistersMVPCommandsAndGlobalJSONFlag(t *testing.T) {
@@ -30,7 +30,7 @@ func TestNewRootCommandRegistersMVPCommandsAndGlobalJSONFlag(t *testing.T) {
 	}
 	sort.Strings(names)
 
-	expected := []string{"diff", "edit", "init", "list", "new", "pull", "push", "status", "sync", "view"}
+	expected := []string{"diff", "edit", "fields", "init", "list", "new", "pull", "push", "status", "sync", "view"}
 	if len(names) != len(expected) {
 		t.Fatalf("unexpected command count: got=%d want=%d (%v)", len(names), len(expected), names)
 	}

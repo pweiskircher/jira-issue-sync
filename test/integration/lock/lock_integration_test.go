@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/lock"
+	"github.com/pweiskircher/jira-issue-sync/internal/lock"
 )
 
 func TestMutatingLockLifecycleAndStaleRecovery(t *testing.T) {

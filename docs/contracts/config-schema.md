@@ -66,8 +66,23 @@ Each `profiles.<name>` object:
 | `project_key` | string | yes | Must not be empty/whitespace. |
 | `default_jql` | string | no | Profile-level JQL, higher precedence than top-level `default_jql`. |
 | `transition_overrides` | object map | no | Keyed by target status label (for example `Done`). |
+| `field_config` | object | no | Controls which fields are fetched and how custom fields are aliased into frontmatter. |
 
 Profile map keys are case-sensitive for identity.
+
+## Field config schema
+
+Each `profiles.<name>.field_config` value:
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `fetch_mode` | string | no | One of `navigable`, `all`, `explicit`. Defaults to `navigable`. |
+| `include_fields` | string[] | no | Additional field IDs to include (for example `customfield_12345`). |
+| `exclude_fields` | string[] | no | Field IDs to remove after include/merge resolution. |
+| `aliases` | object map | no | Map of Jira field IDs to frontmatter aliases (for example `customfield_12345 -> customer`). |
+| `include_metadata` | boolean | no | Reserved for metadata enrichment; currently ignored by runtime behavior. |
+
+When aliases are configured, `pull` writes only aliased custom fields into `custom_fields` frontmatter using alias keys.
 
 ## Transition override schema
 

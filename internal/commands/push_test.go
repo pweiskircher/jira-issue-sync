@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
 )
 
 func TestRunPushDryRunDoesNotMutateRemoteOrLocalState(t *testing.T) {
@@ -304,6 +304,9 @@ type pushAdapterStub struct {
 }
 
 func (s *pushAdapterStub) SearchIssues(context.Context, jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
+	panic("unexpected call")
+}
+func (s *pushAdapterStub) ListFields(context.Context) ([]jira.FieldDefinition, error) {
 	panic("unexpected call")
 }
 func (s *pushAdapterStub) GetIssue(_ context.Context, issueKey string, _ []string) (jira.Issue, error) {

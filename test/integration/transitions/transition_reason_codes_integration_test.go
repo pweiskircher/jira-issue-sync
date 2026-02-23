@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/commands"
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/commands"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
 )
 
 func TestPushTransitionAmbiguityUsesTypedReasonCodeAndOverridePrecedence(t *testing.T) {

@@ -2,6 +2,7 @@ package pull
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -9,22 +10,24 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/converter"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/store"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/converter"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
 )
 
-var pullFields = []string{"summary", "description", "labels", "assignee", "priority", "status", "issuetype", "reporter", "created", "updated"}
+var defaultPullFields = []string{"*navigable"}
 
 type Pipeline struct {
-	Adapter     jira.Adapter
-	Store       *store.Store
-	Converter   converter.Adapter
-	PageSize    int
-	Concurrency int
-	Now         func() time.Time
+	Adapter            jira.Adapter
+	Store              *store.Store
+	Converter          converter.Adapter
+	PageSize           int
+	Concurrency        int
+	Now                func() time.Time
+	CustomFieldAliases map[string]string
+	PullFields         []string
 }
 
 type Outcome struct {
@@ -82,7 +85,12 @@ func (p Pipeline) Execute(ctx context.Context, jql string) (Result, error) {
 		now = time.Now
 	}
 
-	fetched, err := fetchIssues(ctx, p.Adapter, trimmedJQL, pageSize)
+	fetchFields := p.PullFields
+	if len(fetchFields) == 0 {
+		fetchFields = defaultPullFields
+	}
+
+	fetched, err := fetchIssues(ctx, p.Adapter, trimmedJQL, pageSize, fetchFields)
 	if err != nil {
 		return Result{}, err
 	}
@@ -98,7 +106,7 @@ func (p Pipeline) Execute(ctx context.Context, jql string) (Result, error) {
 		return fetched[i].Key < fetched[j].Key
 	})
 
-	prepared := prepareIssues(fetched, concurrency, now().UTC(), p.Converter)
+	prepared := prepareIssues(fetched, concurrency, now().UTC(), p.Converter, p.CustomFieldAliases)
 	sort.Slice(prepared, func(i int, j int) bool {
 		return prepared[i].key < prepared[j].key
 	})
@@ -196,7 +204,7 @@ func (p Pipeline) persist(prepared []preparedIssue) (store.Cache, []preparedIssu
 	return cache, prepared, nil
 }
 
-func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize int) ([]jira.Issue, error) {
+func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize int, fields []string) ([]jira.Issue, error) {
 	issues := make([]jira.Issue, 0)
 	startAt := 0
 	nextPageToken := ""
@@ -207,7 +215,7 @@ func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize
 			JQL:           jql,
 			StartAt:       startAt,
 			MaxResults:    pageSize,
-			Fields:        pullFields,
+			Fields:        append([]string(nil), fields...),
 			NextPageToken: nextPageToken,
 		})
 		if err != nil {
@@ -242,7 +250,7 @@ func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize
 	return issues, nil
 }
 
-func prepareIssues(issues []jira.Issue, concurrency int, syncedAt time.Time, markdownConverter converter.Adapter) []preparedIssue {
+func prepareIssues(issues []jira.Issue, concurrency int, syncedAt time.Time, markdownConverter converter.Adapter, customFieldAliases map[string]string) []preparedIssue {
 	prepared := make([]preparedIssue, len(issues))
 	jobs := make(chan int, len(issues))
 
@@ -260,7 +268,7 @@ func prepareIssues(issues []jira.Issue, concurrency int, syncedAt time.Time, mar
 		go func() {
 			defer wg.Done()
 			for index := range jobs {
-				prepared[index] = prepareIssue(issues[index], syncedAt, markdownConverter)
+				prepared[index] = prepareIssue(issues[index], syncedAt, markdownConverter, customFieldAliases)
 			}
 		}()
 	}
@@ -274,7 +282,7 @@ func prepareIssues(issues []jira.Issue, concurrency int, syncedAt time.Time, mar
 	return prepared
 }
 
-func prepareIssue(remote jira.Issue, syncedAt time.Time, markdownConverter converter.Adapter) preparedIssue {
+func prepareIssue(remote jira.Issue, syncedAt time.Time, markdownConverter converter.Adapter, customFieldAliases map[string]string) preparedIssue {
 	key := strings.TrimSpace(remote.Key)
 	if key == "" {
 		return preparedIssue{key: remote.Key, err: errors.New("issue key is missing"), reasonCode: contracts.ReasonCodeValidationFailed, errorCode: "missing_key"}
@@ -317,6 +325,7 @@ func prepareIssue(remote jira.Issue, syncedAt time.Time, markdownConverter conve
 			CreatedAt:     strings.TrimSpace(remote.Fields.CreatedAt),
 			UpdatedAt:     strings.TrimSpace(remote.Fields.UpdatedAt),
 			SyncedAt:      syncedAt.Format(time.RFC3339Nano),
+			CustomFields:  mapAliasedCustomFields(remote.Fields.CustomFields, customFieldAliases),
 		},
 		MarkdownBody: markdownResult.Markdown,
 		RawADFJSON:   canonicalADF,
@@ -339,7 +348,7 @@ func prepareIssue(remote jira.Issue, syncedAt time.Time, markdownConverter conve
 func issueStateFromStatus(status string) store.IssueState {
 	normalized := strings.ToLower(strings.TrimSpace(status))
 	switch normalized {
-	case "done", "closed", "resolved", "complete", "completed":
+	case "done", "closed", "resolved", "complete", "completed", "rejected", "declined", "cancelled", "canceled", "won't do", "wont do":
 		return store.IssueStateClosed
 	default:
 		return store.IssueStateOpen
@@ -368,6 +377,37 @@ func accountRefValue(ref *jira.AccountRef) string {
 		return value
 	}
 	return strings.TrimSpace(ref.AccountID)
+}
+
+func mapAliasedCustomFields(values map[string]json.RawMessage, aliases map[string]string) map[string]json.RawMessage {
+	if len(values) == 0 || len(aliases) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(aliases))
+	for key := range aliases {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	mapped := make(map[string]json.RawMessage)
+	for _, fieldID := range keys {
+		alias := strings.TrimSpace(aliases[fieldID])
+		if alias == "" {
+			continue
+		}
+		value, ok := values[fieldID]
+		if !ok {
+			continue
+		}
+		if _, exists := mapped[alias]; exists {
+			continue
+		}
+		mapped[alias] = append(json.RawMessage(nil), value...)
+	}
+	if len(mapped) == 0 {
+		return nil
+	}
+	return mapped
 }
 
 func asConverterError(err error) *converter.Error {

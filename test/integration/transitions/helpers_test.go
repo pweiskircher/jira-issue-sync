@@ -6,13 +6,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/issue"
-	"github.com/pat/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/issue"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
 )
 
-func writeTransitionConfig(t interface{ Helper(); Fatalf(string, ...any) }, workspace string) {
+func writeTransitionConfig(t interface {
+	Helper()
+	Fatalf(string, ...any)
+}, workspace string) {
 	t.Helper()
 	cfg := contracts.Config{
 		ConfigVersion: contracts.ConfigSchemaVersionV1,
@@ -39,7 +42,10 @@ func writeTransitionConfig(t interface{ Helper(); Fatalf(string, ...any) }, work
 	}
 }
 
-func writeTransitionIssueFixtures(t interface{ Helper(); Fatalf(string, ...any) }, workspace string) {
+func writeTransitionIssueFixtures(t interface {
+	Helper()
+	Fatalf(string, ...any)
+}, workspace string) {
 	t.Helper()
 	writeTransitionIssueDoc(t, workspace, filepath.Join("open", "PROJ-9-transition.md"), issue.Document{
 		CanonicalKey: "PROJ-9",
@@ -65,7 +71,10 @@ func writeTransitionIssueFixtures(t interface{ Helper(); Fatalf(string, ...any) 
 	})
 }
 
-func writeTransitionIssueDoc(t interface{ Helper(); Fatalf(string, ...any) }, workspace string, relativePath string, doc issue.Document) {
+func writeTransitionIssueDoc(t interface {
+	Helper()
+	Fatalf(string, ...any)
+}, workspace string, relativePath string, doc issue.Document) {
 	t.Helper()
 	rendered, err := issue.RenderDocument(doc)
 	if err != nil {
@@ -88,6 +97,10 @@ type transitionAdapterStub struct {
 
 func (s *transitionAdapterStub) SearchIssues(context.Context, jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
 	return jira.SearchIssuesResponse{}, nil
+}
+
+func (s *transitionAdapterStub) ListFields(context.Context) ([]jira.FieldDefinition, error) {
+	return nil, nil
 }
 
 func (s *transitionAdapterStub) GetIssue(_ context.Context, issueKey string, _ []string) (jira.Issue, error) {

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 const (
@@ -199,6 +199,20 @@ func lookupTrimmed(lookup func(string) (string, bool), key string) string {
 func cloneProfile(profile contracts.ProjectProfile) contracts.ProjectProfile {
 	cloned := profile
 	cloned.TransitionOverrides = cloneTransitionOverrides(profile.TransitionOverrides)
+	cloned.FieldConfig = cloneFieldConfig(profile.FieldConfig)
+	return cloned
+}
+
+func cloneFieldConfig(fieldConfig contracts.FieldConfig) contracts.FieldConfig {
+	cloned := fieldConfig
+	cloned.IncludeFields = append([]string(nil), fieldConfig.IncludeFields...)
+	cloned.ExcludeFields = append([]string(nil), fieldConfig.ExcludeFields...)
+	if len(fieldConfig.Aliases) > 0 {
+		cloned.Aliases = make(map[string]string, len(fieldConfig.Aliases))
+		for key, value := range fieldConfig.Aliases {
+			cloned.Aliases[key] = value
+		}
+	}
 	return cloned
 }
 

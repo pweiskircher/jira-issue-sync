@@ -3,8 +3,8 @@ package commands
 import (
 	"fmt"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
 )
 
 type ListOptions struct {

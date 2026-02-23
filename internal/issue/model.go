@@ -1,21 +1,27 @@
 package issue
 
-import "github.com/pat/jira-issue-sync/internal/contracts"
+import (
+	"encoding/json"
+
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+)
 
 // FrontMatter captures the frozen issue file schema.
 type FrontMatter struct {
-	SchemaVersion string
-	Key           string
-	Summary       string
-	IssueType     string
-	Status        string
-	Priority      string
-	Assignee      string
-	Labels        []string
-	Reporter      string
-	CreatedAt     string
-	UpdatedAt     string
-	SyncedAt      string
+	SchemaVersion    string
+	Key              string
+	Summary          string
+	IssueType        string
+	Status           string
+	Priority         string
+	Assignee         string
+	Labels           []string
+	Reporter         string
+	CreatedAt        string
+	UpdatedAt        string
+	SyncedAt         string
+	CustomFields     map[string]json.RawMessage
+	CustomFieldNames map[string]string
 }
 
 // Document is the deterministic in-memory issue model.
@@ -40,4 +46,6 @@ var CanonicalFrontMatterOrder = []contracts.FrontMatterKey{
 	contracts.FrontMatterKeyCreatedAt,
 	contracts.FrontMatterKeyUpdatedAt,
 	contracts.FrontMatterKeySyncedAt,
+	contracts.FrontMatterKeyCustomFields,
+	contracts.FrontMatterKeyCustomFieldNames,
 }

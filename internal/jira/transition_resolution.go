@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func resolveTransitionSelection(transitions []Transition, selection contracts.TransitionSelection) TransitionResolution {

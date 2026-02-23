@@ -104,6 +104,9 @@ func TestFieldMappingAndNormalization(t *testing.T) {
 	if !SupportedReadOnlyField(JiraFieldReporter) {
 		t.Fatalf("reporter should be read-only")
 	}
+	if !SupportedReadOnlyField(JiraFieldCustomFields) {
+		t.Fatalf("custom_fields should be read-only")
+	}
 
 	if got := NormalizeSingleValue(NormalizationNormalizeLineEndings, "a\r\nb\rc"); got != "a\nb\nc" {
 		t.Fatalf("line ending normalization mismatch: %q", got)

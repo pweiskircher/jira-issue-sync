@@ -15,12 +15,13 @@ const (
 	JiraFieldPriority    JiraField = "priority"
 	JiraFieldStatus      JiraField = "status"
 
-	JiraFieldKey       JiraField = "key"
-	JiraFieldIssueType JiraField = "issue_type"
-	JiraFieldReporter  JiraField = "reporter"
-	JiraFieldCreatedAt JiraField = "created_at"
-	JiraFieldUpdatedAt JiraField = "updated_at"
-	JiraFieldSyncedAt  JiraField = "synced_at"
+	JiraFieldKey          JiraField = "key"
+	JiraFieldIssueType    JiraField = "issue_type"
+	JiraFieldReporter     JiraField = "reporter"
+	JiraFieldCreatedAt    JiraField = "created_at"
+	JiraFieldUpdatedAt    JiraField = "updated_at"
+	JiraFieldSyncedAt     JiraField = "synced_at"
+	JiraFieldCustomFields JiraField = "custom_fields"
 )
 
 type SyncDirection string
@@ -56,7 +57,6 @@ var UnsupportedJiraFieldsMVP = []string{
 	"worklogs",
 	"sprint",
 	"epic_link",
-	"custom_fields",
 }
 
 type FieldContract struct {
@@ -82,6 +82,7 @@ var ReadOnlyFieldContracts = []FieldContract{
 	{Field: JiraFieldCreatedAt, Direction: SyncDirectionReadOnly, Normalization: NormalizationIdentity, UnsupportedPolicy: UnsupportedFieldPolicyWarnAndIgnore},
 	{Field: JiraFieldUpdatedAt, Direction: SyncDirectionReadOnly, Normalization: NormalizationIdentity, UnsupportedPolicy: UnsupportedFieldPolicyWarnAndIgnore},
 	{Field: JiraFieldSyncedAt, Direction: SyncDirectionReadOnly, Normalization: NormalizationIdentity, UnsupportedPolicy: UnsupportedFieldPolicyWarnAndIgnore},
+	{Field: JiraFieldCustomFields, Direction: SyncDirectionReadOnly, Normalization: NormalizationIdentity, UnsupportedPolicy: UnsupportedFieldPolicyWarnAndIgnore},
 }
 
 func SupportedWritableField(field JiraField) bool {

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/pat/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 )
 
 func TestValidateAndCanonicalizeRawADF(t *testing.T) {

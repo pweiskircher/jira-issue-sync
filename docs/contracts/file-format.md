@@ -26,6 +26,8 @@ Optional keys:
 - `created_at`
 - `updated_at`
 - `synced_at`
+- `custom_fields` (JSON object keyed by alias names from profile field config)
+- `custom_field_names` (optional JSON map)
 
 ## Key formats
 

@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pat/jira-issue-sync/internal/config"
-	"github.com/pat/jira-issue-sync/internal/contracts"
-	"github.com/pat/jira-issue-sync/internal/jira"
-	"github.com/pat/jira-issue-sync/internal/output"
-	"github.com/pat/jira-issue-sync/internal/store"
-	pullsync "github.com/pat/jira-issue-sync/internal/sync/pull"
+	"github.com/pweiskircher/jira-issue-sync/internal/config"
+	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
+	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/output"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
+	pullsync "github.com/pweiskircher/jira-issue-sync/internal/sync/pull"
 )
 
 type PullOptions struct {
@@ -72,12 +72,14 @@ func RunPull(ctx context.Context, workDir string, options PullOptions) (output.R
 	}
 
 	pipeline := pullsync.Pipeline{
-		Adapter:     adapter,
-		Store:       issueStore,
-		Converter:   pullsync.NewADFMarkdownConverter(),
-		PageSize:    options.PageSize,
-		Concurrency: options.Concurrency,
-		Now:         now,
+		Adapter:            adapter,
+		Store:              issueStore,
+		Converter:          pullsync.NewADFMarkdownConverter(),
+		PageSize:           options.PageSize,
+		Concurrency:        options.Concurrency,
+		Now:                now,
+		CustomFieldAliases: settings.Profile.FieldConfig.Aliases,
+		PullFields:         resolvePullFields(settings.Profile.FieldConfig),
 	}
 
 	result, err := pipeline.Execute(ctx, jql)
@@ -113,4 +115,63 @@ func asJiraError(err error) *jira.Error {
 		return typed
 	}
 	return nil
+}
+
+func resolvePullFields(fieldConfig contracts.FieldConfig) []string {
+	mode := strings.ToLower(strings.TrimSpace(fieldConfig.FetchMode))
+	fields := make([]string, 0)
+	switch mode {
+	case "all":
+		fields = append(fields, "*all")
+	case "explicit":
+		// Only include explicit fields below.
+	default:
+		fields = append(fields, "*navigable")
+	}
+
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(fields)+len(fieldConfig.IncludeFields))
+	for _, field := range fields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+	for _, field := range fieldConfig.IncludeFields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed == "" {
+			continue
+		}
+		if _, ok := seen[trimmed]; ok {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		result = append(result, trimmed)
+	}
+
+	excluded := make(map[string]struct{}, len(fieldConfig.ExcludeFields))
+	for _, field := range fieldConfig.ExcludeFields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed == "" {
+			continue
+		}
+		excluded[trimmed] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(result))
+	for _, field := range result {
+		if _, excludedField := excluded[field]; excludedField {
+			continue
+		}
+		filtered = append(filtered, field)
+	}
+	if len(filtered) == 0 {
+		return []string{"*navigable"}
+	}
+	return filtered
 }
