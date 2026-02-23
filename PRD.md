@@ -188,6 +188,11 @@ Environment variables:
 - `JIRA_API_TOKEN` (required)
 - `JIRA_BASE_URL` and `JIRA_EMAIL` may be used as setup input/overrides when running `init`.
 
+Precedence rules:
+
+- Runtime settings resolve as: CLI flags > environment variables > `.issues/.sync/config.json`.
+- Token source is always environment-only (`JIRA_API_TOKEN`).
+
 ## 12) Technical requirements
 
 1. No dependency on `gh` CLI or `jira` CLI for core sync operations.
@@ -217,6 +222,63 @@ Operational behavior:
 - Pull uses JQL + pagination via REST endpoints.
 - Push uses issue update/create + transition endpoints.
 - Per-issue failures are reported without stopping all work where possible.
+
+### 12.2 Runtime baseline and packaging
+
+- Language/runtime: Go (stable 1.x line), single static CLI binary.
+- Command framework: `cobra` + `pflag`.
+- Test stack: Go unit tests + integration tests with mocked Jira REST.
+- Target platforms for release artifacts: macOS and Linux (arm64 + amd64).
+
+### 12.3 Machine-readable output and exit-code contract
+
+All commands support structured JSON output mode (for agents/scripts) in addition to human-readable output.
+
+Result envelope includes:
+
+- command metadata (`command`, `duration_ms`, `dry_run`)
+- aggregate counts (`processed`, `updated`, `created`, `conflicts`, `warnings`, `errors`)
+- per-issue results (`key`, `action`, `status`, `messages[]`)
+
+Exit codes:
+
+- `0`: success (no conflicts/errors)
+- `2`: partial success (warnings and/or skipped conflicts, no fatal command error)
+- `1`: fatal command failure (setup/config/auth/lock/transport failure)
+
+### 12.4 Transition override config contract
+
+Per-project config supports transition overrides with this precedence:
+
+1. explicit transition ID override
+2. explicit transition name override
+3. dynamic transition discovery by target status name/alias
+
+If multiple transitions match and no override disambiguates, mark issue as warning/error and skip transition.
+
+### 12.5 Temp-ID rewrite boundaries
+
+When publishing `L-<hex>` drafts, rewrites are limited to:
+
+- filename key prefix
+- front matter key field
+- markdown body references matching `#L-<hex>`
+
+Out of scope for automatic rewrite in MVP:
+
+- arbitrary prose mentions without `#` reference syntax
+- references inside embedded raw ADF fenced blocks
+- external files outside `.issues/`
+
+### 12.6 Description risk classification rules
+
+A description update is marked `risky` if any of the following is true:
+
+- converter reports unsupported node/mark types for Markdown round-trip
+- converter reports lossy normalization for known structured nodes (for example tables/panels)
+- embedded raw ADF block is missing or malformed for an issue that previously had one
+
+Default behavior: block description update for that issue, continue syncing other safe fields, and report reason code in output.
 
 ## 13) Risks and mitigations
 
@@ -254,10 +316,12 @@ Operational behavior:
 ## 15) Definition of done (MVP)
 
 - Users can `init`, `pull`, edit 20+ issues locally, `push`, and `sync` successfully.
-- Conflicts are detected and reported clearly.
-- New local issues can be created and published.
-- Core docs include install, auth, command usage, and file format.
-- Test coverage includes parser, conflict logic, and push/pull happy paths.
+- Conflicts are detected and reported clearly with deterministic exit codes and JSON output.
+- New local issues can be created and published with deterministic temp-ID rewrite behavior.
+- Core docs include install, auth, config precedence, command usage, file format, and troubleshooting.
+- Test coverage includes parser determinism, conflict logic, risky-description blocking, and push/pull happy paths.
+- Security tests explicitly cover token redaction, path sanitization, stale-lock recovery, and dry-run no-write guarantees.
+- Performance validation demonstrates pull of ~200 issues near target envelope (60s network permitting).
 
 ## 16) Resolved decisions (2026-02-20)
 
@@ -272,3 +336,6 @@ Operational behavior:
 9. Safety policy: block risky description updates by default.
 10. Transition strategy: hybrid (dynamic discovery + config override).
 11. Pull fidelity: Markdown + embedded raw ADF block for complex content.
+12. Runtime baseline: Go CLI (`cobra`) with mocked REST integration tests.
+13. Output contract: JSON result envelope + deterministic exit-code matrix (`0/2/1`).
+14. Rewrite scope: only filename key, front matter key, and `#L-<hex>` body references.
