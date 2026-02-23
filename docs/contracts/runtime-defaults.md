@@ -27,7 +27,7 @@ Source of truth: `internal/contracts/runtime_defaults.go`
 Lock requirements by command:
 
 - Exclusive lock: `init`, `pull`, `push`, `sync`, `new`, `edit`
-- No lock required: `status`, `list`, `view`, `diff`
+- No lock required: `status`, `list`, `view`, `diff`, `fields`
 
 Lock timing defaults:
 

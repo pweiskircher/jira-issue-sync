@@ -16,6 +16,7 @@ MVP commands:
 - `edit`
 - `view`
 - `diff`
+- `fields`
 
 ## Install
 

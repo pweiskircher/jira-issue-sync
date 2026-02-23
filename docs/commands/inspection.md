@@ -56,6 +56,26 @@ Per-issue actions:
 
 Default output hides `unchanged` unless `--all` is set.
 
+## fields
+
+List Jira field IDs and names to help configure custom field aliases.
+
+Usage:
+
+- `jira-issue-sync fields`
+
+Optional:
+
+- `--profile <name>`
+- `--search <substring>`
+- `--all` (include non-custom Jira fields)
+
+Behavior:
+
+- By default, returns custom fields only.
+- Emits one result per field with ID as key and `name=... custom=...` in messages.
+- Useful for mapping `customfield_XXXXX` IDs into `profiles.<name>.field_config.aliases`.
+
 ## view
 
 Render one local issue in canonical format.

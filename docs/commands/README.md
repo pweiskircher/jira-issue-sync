@@ -29,6 +29,7 @@ These commands do not require the lock:
 - `list`
 - `view`
 - `diff`
+- `fields`
 
 See: [`inspection.md`](./inspection.md)
 
