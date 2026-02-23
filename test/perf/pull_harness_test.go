@@ -219,36 +219,36 @@ func runPullHarness(t *testing.T, cfg pullHarnessConfig) harnessMetrics {
 		Email:    "perf@example.com",
 		APIToken: "token",
 		HTTPDoer: doerFunc(func(req *http.Request) (*http.Response, error) {
-			body, err := io.ReadAll(req.Body)
-			if err != nil {
-				return nil, err
+			query := req.URL.Query()
+			startAt := 0
+			if token := query.Get("nextPageToken"); token != "" {
+				if _, err := fmt.Sscanf(token, "%d", &startAt); err != nil {
+					return nil, err
+				}
 			}
-			_ = req.Body.Close()
-
-			var payload struct {
-				StartAt    int `json:"startAt"`
-				MaxResults int `json:"maxResults"`
-			}
-			if err := json.Unmarshal(body, &payload); err != nil {
-				return nil, err
+			maxResults := cfg.PageSize
+			if rawMax := query.Get("maxResults"); rawMax != "" {
+				if _, err := fmt.Sscanf(rawMax, "%d", &maxResults); err != nil {
+					return nil, err
+				}
 			}
 
 			atomic.AddInt32(&attempts, 1)
 
 			pageMu.Lock()
-			isFirstAttemptForPage := !pageSeen[payload.StartAt]
+			isFirstAttemptForPage := !pageSeen[startAt]
 			if isFirstAttemptForPage {
-				pageSeen[payload.StartAt] = true
+				pageSeen[startAt] = true
 			}
 			pageMu.Unlock()
 
-			if payload.StartAt == 0 && isFirstAttemptForPage {
+			if startAt == 0 && isFirstAttemptForPage {
 				atomic.AddInt32(&retryAttempts, 1)
 				return responseWithStatus(http.StatusTooManyRequests, `{"errorMessages":["rate limited"]}`), nil
 			}
 
-			issues := make([]map[string]any, 0, payload.MaxResults)
-			for index := payload.StartAt; index < payload.StartAt+payload.MaxResults && index < cfg.IssueCount; index++ {
+			issues := make([]map[string]any, 0, maxResults)
+			for index := startAt; index < startAt+maxResults && index < cfg.IssueCount; index++ {
 				issues = append(issues, map[string]any{
 					"id":  fmt.Sprintf("%d", 1000+index),
 					"key": fmt.Sprintf("PERF-%d", index+1),
@@ -273,11 +273,19 @@ func runPullHarness(t *testing.T, cfg pullHarnessConfig) harnessMetrics {
 				})
 			}
 
+			nextPageToken := ""
+			isLast := true
+			if startAt+len(issues) < cfg.IssueCount {
+				nextPageToken = fmt.Sprintf("%d", startAt+len(issues))
+				isLast = false
+			}
+
 			responsePayload, err := json.Marshal(map[string]any{
-				"startAt":    payload.StartAt,
-				"maxResults": payload.MaxResults,
-				"total":      cfg.IssueCount,
-				"issues":     issues,
+				"maxResults":    maxResults,
+				"total":         cfg.IssueCount,
+				"issues":        issues,
+				"nextPageToken": nextPageToken,
+				"isLast":        isLast,
 			})
 			if err != nil {
 				return nil, err

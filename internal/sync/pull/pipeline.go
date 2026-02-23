@@ -199,13 +199,16 @@ func (p Pipeline) persist(prepared []preparedIssue) (store.Cache, []preparedIssu
 func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize int) ([]jira.Issue, error) {
 	issues := make([]jira.Issue, 0)
 	startAt := 0
+	nextPageToken := ""
+	usingTokenPagination := false
 
 	for {
 		response, err := adapter.SearchIssues(ctx, jira.SearchIssuesRequest{
-			JQL:        jql,
-			StartAt:    startAt,
-			MaxResults: pageSize,
-			Fields:     pullFields,
+			JQL:           jql,
+			StartAt:       startAt,
+			MaxResults:    pageSize,
+			Fields:        pullFields,
+			NextPageToken: nextPageToken,
 		})
 		if err != nil {
 			return nil, err
@@ -216,8 +219,22 @@ func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize
 			break
 		}
 
+		if response.NextPageToken != "" || response.IsLast {
+			usingTokenPagination = true
+		}
+		if usingTokenPagination {
+			if response.IsLast || response.NextPageToken == "" {
+				break
+			}
+			nextPageToken = response.NextPageToken
+			continue
+		}
+
 		startAt = response.StartAt + len(response.Issues)
 		if response.Total > 0 && startAt >= response.Total {
+			break
+		}
+		if response.MaxResults > 0 && len(response.Issues) < response.MaxResults {
 			break
 		}
 	}

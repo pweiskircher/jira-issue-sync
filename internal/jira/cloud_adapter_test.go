@@ -29,6 +29,7 @@ func TestCloudAdapterSearchIssuesRetriesOnDefaultRetryCodes(t *testing.T) {
 	attempts := 0
 	methods := make([]string, 0)
 	paths := make([]string, 0)
+	queries := make([]string, 0)
 	bodies := make([]string, 0)
 	headers := make([]string, 0)
 	mu := sync.Mutex{}
@@ -38,15 +39,20 @@ func TestCloudAdapterSearchIssuesRetriesOnDefaultRetryCodes(t *testing.T) {
 		Email:    "agent@example.com",
 		APIToken: "token-123",
 		HTTPDoer: doerFunc(func(req *http.Request) (*http.Response, error) {
-			payload, err := io.ReadAll(req.Body)
-			if err != nil {
-				return nil, err
+			payload := []byte{}
+			if req.Body != nil {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					return nil, err
+				}
+				payload = body
 			}
 
 			mu.Lock()
 			attempts++
 			methods = append(methods, req.Method)
 			paths = append(paths, req.URL.Path)
+			queries = append(queries, req.URL.RawQuery)
 			bodies = append(bodies, string(payload))
 			headers = append(headers, req.Header.Get("Authorization"))
 			currentAttempt := attempts
@@ -94,13 +100,22 @@ func TestCloudAdapterSearchIssuesRetriesOnDefaultRetryCodes(t *testing.T) {
 	}
 
 	for i := range methods {
-		if methods[i] != http.MethodPost {
+		if methods[i] != http.MethodGet {
 			t.Fatalf("unexpected method on attempt %d: %s", i+1, methods[i])
 		}
-		if paths[i] != "/rest/api/3/search" {
+		if paths[i] != "/rest/api/3/search/jql" {
 			t.Fatalf("unexpected path on attempt %d: %s", i+1, paths[i])
 		}
-		if !strings.Contains(bodies[i], `"jql":"project = PROJ"`) {
+		if !strings.Contains(queries[i], "jql=project+%3D+PROJ") {
+			t.Fatalf("missing jql query on attempt %d: %s", i+1, queries[i])
+		}
+		if !strings.Contains(queries[i], "maxResults=50") {
+			t.Fatalf("missing maxResults query on attempt %d: %s", i+1, queries[i])
+		}
+		if !strings.Contains(queries[i], "fields=summary%2Clabels%2Cdescription") {
+			t.Fatalf("missing fields query on attempt %d: %s", i+1, queries[i])
+		}
+		if strings.TrimSpace(bodies[i]) != "" {
 			t.Fatalf("unexpected payload on attempt %d: %s", i+1, bodies[i])
 		}
 		if !strings.HasPrefix(headers[i], "Basic ") {

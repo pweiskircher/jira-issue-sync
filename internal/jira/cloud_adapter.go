@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/pat/jira-issue-sync/internal/contracts"
@@ -74,21 +75,20 @@ func (a *CloudAdapter) SearchIssues(ctx context.Context, request SearchIssuesReq
 		return SearchIssuesResponse{}, &Error{Code: ErrorCodeInvalidInput, Message: "jira adapter is nil"}
 	}
 
-	payload := map[string]any{
-		"jql": request.JQL,
-	}
-	if request.StartAt >= 0 {
-		payload["startAt"] = request.StartAt
-	}
+	query := url.Values{}
+	query.Set("jql", request.JQL)
 	if request.MaxResults > 0 {
-		payload["maxResults"] = request.MaxResults
+		query.Set("maxResults", strconv.Itoa(request.MaxResults))
 	}
 	if fields := normalizeStringSlice(request.Fields); len(fields) > 0 {
-		payload["fields"] = fields
+		query.Set("fields", strings.Join(fields, ","))
+	}
+	if token := strings.TrimSpace(request.NextPageToken); token != "" {
+		query.Set("nextPageToken", token)
 	}
 
 	var response searchIssuesAPIResponse
-	if err := a.doJSON(ctx, http.MethodPost, "/rest/api/3/search", nil, payload, []int{http.StatusOK}, &response); err != nil {
+	if err := a.doJSON(ctx, http.MethodGet, "/rest/api/3/search/jql", query, nil, []int{http.StatusOK}, &response); err != nil {
 		return SearchIssuesResponse{}, err
 	}
 
@@ -98,10 +98,12 @@ func (a *CloudAdapter) SearchIssues(ctx context.Context, request SearchIssuesReq
 	}
 
 	return SearchIssuesResponse{
-		StartAt:    response.StartAt,
-		MaxResults: response.MaxResults,
-		Total:      response.Total,
-		Issues:     issues,
+		StartAt:       response.StartAt,
+		MaxResults:    response.MaxResults,
+		Total:         response.Total,
+		Issues:        issues,
+		NextPageToken: strings.TrimSpace(response.NextPageToken),
+		IsLast:        response.IsLast,
 	}, nil
 }
 
@@ -555,10 +557,12 @@ func extractAPIErrorMessage(body []byte) string {
 }
 
 type searchIssuesAPIResponse struct {
-	StartAt    int                `json:"startAt"`
-	MaxResults int                `json:"maxResults"`
-	Total      int                `json:"total"`
-	Issues     []issueAPIResponse `json:"issues"`
+	StartAt       int                `json:"startAt"`
+	MaxResults    int                `json:"maxResults"`
+	Total         int                `json:"total"`
+	Issues        []issueAPIResponse `json:"issues"`
+	NextPageToken string             `json:"nextPageToken"`
+	IsLast        bool               `json:"isLast"`
 }
 
 type issueAPIResponse struct {

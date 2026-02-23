@@ -18,17 +18,20 @@ type Adapter interface {
 }
 
 type SearchIssuesRequest struct {
-	JQL        string
-	StartAt    int
-	MaxResults int
-	Fields     []string
+	JQL           string
+	StartAt       int
+	MaxResults    int
+	Fields        []string
+	NextPageToken string
 }
 
 type SearchIssuesResponse struct {
-	StartAt    int
-	MaxResults int
-	Total      int
-	Issues     []Issue
+	StartAt       int
+	MaxResults    int
+	Total         int
+	Issues        []Issue
+	NextPageToken string
+	IsLast        bool
 }
 
 type Issue struct {
