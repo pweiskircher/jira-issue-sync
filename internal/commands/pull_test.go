@@ -98,6 +98,58 @@ func TestRunPullContinuesAfterPerIssueFailures(t *testing.T) {
 	}
 }
 
+func TestRunPullHidesUnchangedIssues(t *testing.T) {
+	t.Parallel()
+
+	workspace := t.TempDir()
+	writePullConfig(t, workspace)
+
+	adapter := &pullAdapterStub{}
+	adapter.search = func(_ context.Context, request jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
+		if request.StartAt > 0 {
+			return jira.SearchIssuesResponse{StartAt: request.StartAt, Total: 1}, nil
+		}
+		return jira.SearchIssuesResponse{StartAt: 0, Total: 1, Issues: []jira.Issue{{
+			Key: "PROJ-10",
+			Fields: jira.IssueFields{
+				Summary:     "Stable",
+				Description: json.RawMessage(`{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"same"}]}]}`),
+				Status:      &jira.StatusRef{Name: "Open"},
+				IssueType:   &jira.NamedRef{Name: "Task"},
+				UpdatedAt:   "2026-02-20T12:00:00Z",
+			},
+		}}}, nil
+	}
+
+	first, err := RunPull(context.Background(), workspace, PullOptions{
+		Adapter:     adapter,
+		Environment: config.Environment{JiraAPIToken: "token"},
+	})
+	if err != nil {
+		t.Fatalf("first pull failed: %v", err)
+	}
+	if first.Counts.Processed != 1 || first.Counts.Updated != 1 || first.Counts.Errors != 0 {
+		t.Fatalf("unexpected first pull counts: %#v", first.Counts)
+	}
+	if len(first.Issues) != 1 {
+		t.Fatalf("expected one changed issue on first pull, got %#v", first.Issues)
+	}
+
+	second, err := RunPull(context.Background(), workspace, PullOptions{
+		Adapter:     adapter,
+		Environment: config.Environment{JiraAPIToken: "token"},
+	})
+	if err != nil {
+		t.Fatalf("second pull failed: %v", err)
+	}
+	if second.Counts.Processed != 1 || second.Counts.Updated != 0 || second.Counts.Errors != 0 {
+		t.Fatalf("unexpected second pull counts: %#v", second.Counts)
+	}
+	if len(second.Issues) != 0 {
+		t.Fatalf("expected unchanged issue to be hidden, got %#v", second.Issues)
+	}
+}
+
 func writePullConfig(t *testing.T, workspace string) {
 	t.Helper()
 

@@ -39,6 +39,8 @@ Behavior:
 - Uses resolved profile + JQL precedence.
 - Continues past per-issue conversion/persistence failures.
 - Writes successful issues to `.issues/open|closed/` and `.issues/.sync/originals/<KEY>.md`.
+- Skips rewriting unchanged issues (same canonical file, snapshot, and cache metadata).
+- Human output lists only changed or errored issues; unchanged issues are counted as processed but not listed.
 - Updates `.issues/.sync/cache.json` for successful issues.
 
 ## push

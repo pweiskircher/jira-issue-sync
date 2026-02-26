@@ -2,10 +2,14 @@ package pull
 
 import (
 	"context"
+	"encoding/json"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pweiskircher/jira-issue-sync/internal/contracts"
 	"github.com/pweiskircher/jira-issue-sync/internal/jira"
+	"github.com/pweiskircher/jira-issue-sync/internal/store"
 )
 
 type paginationAdapterStub struct {
@@ -86,5 +90,66 @@ func TestFetchIssuesUsesTokenPaginationWhenAvailable(t *testing.T) {
 	}
 	if len(issues) != 2 {
 		t.Fatalf("expected 2 issues, got %d", len(issues))
+	}
+}
+
+func TestPipelineMarksUnchangedIssueWithoutRewriting(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	issueStore, err := store.New(filepath.Join(root, contracts.DefaultIssuesRootDir))
+	if err != nil {
+		t.Fatalf("store init failed: %v", err)
+	}
+
+	adapter := &paginationAdapterStub{}
+	adapter.search = func(_ context.Context, _ jira.SearchIssuesRequest) (jira.SearchIssuesResponse, error) {
+		return jira.SearchIssuesResponse{
+			StartAt: 0,
+			Total:   1,
+			Issues: []jira.Issue{{
+				Key: "PROJ-1",
+				Fields: jira.IssueFields{
+					Summary:     "Stable",
+					Description: json.RawMessage(`{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"same"}]}]}`),
+					Status:      &jira.StatusRef{Name: "Open"},
+					IssueType:   &jira.NamedRef{Name: "Task"},
+					UpdatedAt:   "2026-02-20T12:00:00Z",
+				},
+			}},
+		}, nil
+	}
+
+	now := func() time.Time {
+		return time.Date(2026, time.February, 25, 21, 0, 0, 0, time.UTC)
+	}
+
+	pipeline := Pipeline{
+		Adapter:   adapter,
+		Store:     issueStore,
+		Converter: NewADFMarkdownConverter(),
+		Now:       now,
+	}
+
+	first, err := pipeline.Execute(context.Background(), "project = PROJ")
+	if err != nil {
+		t.Fatalf("first execute failed: %v", err)
+	}
+	if len(first.Outcomes) != 1 || !first.Outcomes[0].Updated || first.Outcomes[0].Action != "pull" {
+		t.Fatalf("unexpected first outcome: %#v", first.Outcomes)
+	}
+
+	second, err := pipeline.Execute(context.Background(), "project = PROJ")
+	if err != nil {
+		t.Fatalf("second execute failed: %v", err)
+	}
+	if len(second.Outcomes) != 1 {
+		t.Fatalf("unexpected second outcomes length: %#v", second.Outcomes)
+	}
+	if second.Outcomes[0].Updated {
+		t.Fatalf("expected unchanged second outcome, got %#v", second.Outcomes[0])
+	}
+	if second.Outcomes[0].Action != "unchanged" {
+		t.Fatalf("expected unchanged action, got %#v", second.Outcomes[0])
 	}
 }

@@ -1,10 +1,13 @@
 package pull
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -49,6 +52,7 @@ type preparedIssue struct {
 	canonical       string
 	state           store.IssueState
 	remoteUpdatedAt string
+	changed         bool
 	err             error
 	reasonCode      contracts.ReasonCode
 	errorCode       string
@@ -134,14 +138,21 @@ func (p Pipeline) Execute(ctx context.Context, jql string) (Result, error) {
 			continue
 		}
 
+		action := "unchanged"
+		message := "issue unchanged"
+		if entry.changed {
+			action = "pull"
+			message = "synchronized issue snapshot"
+		}
+
 		outcomes = append(outcomes, Outcome{
 			Key:     entry.key,
-			Action:  "pull",
+			Action:  action,
 			Status:  contracts.PerIssueStatusSuccess,
-			Updated: true,
+			Updated: entry.changed,
 			Messages: []contracts.IssueMessage{{
 				Level: "info",
-				Text:  "synchronized issue snapshot",
+				Text:  message,
 			}},
 		})
 	}
@@ -158,6 +169,24 @@ func (p Pipeline) persist(prepared []preparedIssue) (store.Cache, []preparedIssu
 	for index := range prepared {
 		entry := &prepared[index]
 		if entry.err != nil {
+			continue
+		}
+
+		desiredPath, desiredPathErr := issuePath(entry.state, entry.key, entry.summary)
+		if desiredPathErr != nil {
+			entry.err = desiredPathErr
+			entry.reasonCode = contracts.ReasonCodeValidationFailed
+			entry.errorCode = "build_issue_path_failed"
+			continue
+		}
+
+		if persistedUnchanged, unchangedErr := p.isPersistedIssueUnchanged(cache, *entry, desiredPath); unchangedErr != nil {
+			entry.err = unchangedErr
+			entry.reasonCode = contracts.ReasonCodeValidationFailed
+			entry.errorCode = "read_existing_issue_failed"
+			continue
+		} else if persistedUnchanged {
+			entry.changed = false
 			continue
 		}
 
@@ -202,6 +231,98 @@ func (p Pipeline) persist(prepared []preparedIssue) (store.Cache, []preparedIssu
 	}
 
 	return cache, prepared, nil
+}
+
+func issuePath(state store.IssueState, key string, summary string) (string, error) {
+	dir := ""
+	switch state {
+	case store.IssueStateOpen:
+		dir = "open"
+	case store.IssueStateClosed:
+		dir = "closed"
+	default:
+		return "", fmt.Errorf("unsupported issue state %q", state)
+	}
+
+	filename, err := issue.BuildFilename(strings.TrimSpace(key), summary)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(dir, filename), nil
+}
+
+func (p Pipeline) isPersistedIssueUnchanged(cache store.Cache, entry preparedIssue, desiredPath string) (bool, error) {
+	previous, ok := cache.Issues[entry.key]
+	if !ok {
+		return false, nil
+	}
+	if previous.Path != desiredPath {
+		return false, nil
+	}
+	if previous.Status != string(entry.state) {
+		return false, nil
+	}
+	if previous.RemoteUpdatedAt != entry.remoteUpdatedAt {
+		return false, nil
+	}
+
+	existingIssue, issueExists, issueReadErr := p.readIfExists(previous.Path)
+	if issueReadErr != nil {
+		return false, issueReadErr
+	}
+	if !issueExists || !isCanonicalTextEqual(existingIssue, entry.canonical) {
+		return false, nil
+	}
+
+	snapshotPath := filepath.Join(".sync", "originals", entry.key+".md")
+	existingSnapshot, snapshotExists, snapshotReadErr := p.readIfExists(snapshotPath)
+	if snapshotReadErr != nil {
+		return false, snapshotReadErr
+	}
+	if !snapshotExists || !isCanonicalTextEqual(existingSnapshot, entry.canonical) {
+		return false, nil
+	}
+
+	cache.Issues[entry.key] = previous
+	return true, nil
+}
+
+func (p Pipeline) readIfExists(path string) ([]byte, bool, error) {
+	content, err := p.Store.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	return content, true, nil
+}
+
+func isCanonicalTextEqual(existing []byte, canonical string) bool {
+	return bytes.Equal(normalizePullText(string(existing)), normalizePullText(canonical))
+}
+
+func normalizePullText(input string) []byte {
+	normalized := contracts.NormalizeSingleValue(contracts.NormalizationNormalizeLineEndings, input)
+	if normalized == "" {
+		return []byte{}
+	}
+
+	lines := strings.Split(normalized, "\n")
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "synced_at:") {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+
+	normalized = strings.Join(filtered, "\n")
+	if !strings.HasSuffix(normalized, "\n") {
+		normalized += "\n"
+	}
+	return []byte(normalized)
 }
 
 func fetchIssues(ctx context.Context, adapter jira.Adapter, jql string, pageSize int, fields []string) ([]jira.Issue, error) {
@@ -342,6 +463,7 @@ func prepareIssue(remote jira.Issue, syncedAt time.Time, markdownConverter conve
 		canonical:       canonical,
 		state:           issueStateFromStatus(doc.FrontMatter.Status),
 		remoteUpdatedAt: doc.FrontMatter.UpdatedAt,
+		changed:         true,
 	}
 }
 

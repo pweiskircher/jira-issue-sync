@@ -98,6 +98,11 @@ func RunPull(ctx context.Context, workDir string, options PullOptions) (output.R
 		if outcome.Status == contracts.PerIssueStatusError {
 			report.Counts.Errors++
 		}
+
+		if !outcome.Updated && outcome.Status == contracts.PerIssueStatusSuccess {
+			continue
+		}
+
 		report.Issues = append(report.Issues, contracts.PerIssueResult{
 			Key:      outcome.Key,
 			Action:   outcome.Action,
